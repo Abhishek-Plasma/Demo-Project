@@ -7,6 +7,16 @@ pipeline {
     }
 
     stages {
+        stage('Install Tools') {
+            steps {
+                bat '''
+                    dotnet tool install --global Swashbuckle.AspNetCore.Cli
+                    dotnet tool install --global dotnet-tool
+                    dotnet new tool-manifest --force
+                    dotnet tool install Swashbuckle.AspNetCore.Cli
+                '''
+            }
+        }
 
         stage('Restore Tools') {
             steps {
@@ -16,16 +26,19 @@ pipeline {
 
         stage('Build') {
             steps {
-                bat 'dotnet build'
+                // Disable the post-build event temporarily, or modify the .csproj
+                bat 'dotnet build /p:PostBuildEvent='
+                // OR: Build without the problematic post-build event
+                // bat 'dotnet build --no-incremental'
             }
         }
 
         stage('Generate Swagger') {
             steps {
                 bat '''
-                dotnet tool run swagger tofile ^
-                --output generated-swagger.json ^
-                SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    dotnet swagger tofile ^
+                    --output generated-swagger.json ^
+                    SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
                 '''
             }
         }
@@ -33,8 +46,8 @@ pipeline {
         stage('Lint Swagger') {
             steps {
                 bat '''
-                npx @stoplight/spectral-cli lint generated-swagger.json ^
-                -r spectral.yaml
+                    npx @stoplight/spectral-cli lint generated-swagger.json ^
+                    -r spectral.yaml
                 '''
             }
         }
@@ -42,8 +55,8 @@ pipeline {
         stage('Breaking Change Check') {
             steps {
                 bat '''
-                "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking ^
-                swagger.json generated-swagger.json
+                    "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking ^
+                    swagger.json generated-swagger.json
                 '''
             }
         }
