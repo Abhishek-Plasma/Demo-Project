@@ -8,6 +8,12 @@ pipeline {
 
     stages {
 
+        stage('Restore Tools') {
+            steps {
+                bat 'dotnet tool restore'
+            }
+        }
+
         stage('Build') {
             steps {
                 bat 'dotnet build'
@@ -19,7 +25,7 @@ pipeline {
                 bat '''
                 dotnet tool run swagger tofile ^
                 --output generated-swagger.json ^
-                bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
                 '''
             }
         }
