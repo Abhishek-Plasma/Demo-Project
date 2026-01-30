@@ -1,0 +1,86 @@
+﻿extends:
+  - spectral:oas
+
+rules:
+
+
+  operation-summary-required:
+    description: Every operation MUST have a summary
+    given: $.paths[*][*]
+    then:
+      function: truthy
+      field: summary
+    severity: error
+
+  operation-description-optional:
+    description: Operation description is recommended
+    given: $.paths[*][*]
+    then:
+      function: truthy
+      field: description
+    severity: warn
+
+  info-title:
+    description: API info.title is required
+    given: $.info.title
+    then:
+      function: truthy
+    severity: error
+
+  info-description:
+    description: API info.description is required
+    given: $.info.description
+    then:
+      function: truthy
+    severity: error
+
+  info-version:
+    description: API info.version is required
+    given: $.info.version
+    then:
+      function: truthy
+    severity: error
+
+  info-contact:
+    description: API info.contact is recommended
+    given: $.info.contact
+    then:
+      function: truthy
+    severity: warn
+
+  operation-summary:
+    description: Each operation should have a summary
+    given: $.paths[*][*]
+    then:
+      function: truthy
+      field: summary
+    severity: warn
+
+  operation-description:
+    description: Each operation should have a description
+    given: $.paths[*][*]
+    then:
+      function: truthy
+      field: description
+    severity: warn
+
+  operation-tags:
+    description: Operations should include at least one tag
+    given: $.paths[*][*]
+    then:
+      function: truthy
+      field: tags
+    severity: warn
+
+  standard-error-responses:
+    description: APIs must define standard error responses (400, 401, 500)
+    given: $.paths[*][*].responses
+    then:
+      - function: truthy
+        field: "400"
+      - function: truthy
+        field: "401"
+      - function: truthy
+        field: "500"
+    severity: error
+

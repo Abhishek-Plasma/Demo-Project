@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SwaggerJsonGen</name>
+    </assembly>
+    <members>
+        <member name="M:SwaggerJsonGen.Controllers.WeatherForecastController.Get">
+            <summary>
+            Retrieves a 5-day weather forecast.
+            </summary>
+            <remarks>
+            Returns randomly generated weather data including date, temperature, and summary.
+            </remarks>
+        </member>
+    </members>
+</doc>

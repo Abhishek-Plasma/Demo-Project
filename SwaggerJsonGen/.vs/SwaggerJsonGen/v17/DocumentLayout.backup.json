@@ -1,0 +1,195 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\swaggerjsongen.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\swagger.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\swagger.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\controllers\\weatherforecastcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\weatherforecast.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\weatherforecast.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\spectral.yaml||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\spectral.yaml||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\contracts\\swagger-v1-approved.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\contracts\\swagger-v1-approved.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|e:\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen\\swaggerjsongen.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{94EBB463-1D03-42B5-BD01-79AA57BF40C7}|SwaggerJsonGen\\SwaggerJsonGen.csproj|solutionrelative:swaggerjsongen\\swaggerjsongen.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 6,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{13b12e3e-c1b4-4539-9371-4fe9a0d523fc}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:140:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{13b12e3e-c1b4-4539-9371-4fe9a0d523fc}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "swagger.json",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\swagger.json",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\swagger.json",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\swagger.json",
+              "RelativeToolTip": "SwaggerJsonGen\\swagger.json",
+              "ViewState": "AgIAAGMAAAAAAAAAAAAIwG8AAAARAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-01-28T17:29:38.842Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "SwaggerJsonGen.csproj",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen.csproj*",
+              "RelativeToolTip": "SwaggerJsonGen\\SwaggerJsonGen.csproj*",
+              "ViewState": "AgIAABcAAAAAAAAAAAAAACQAAAA7AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-01-27T10:03:10.399Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "WeatherForecastController.cs",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\Controllers\\WeatherForecastController.cs",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\Controllers\\WeatherForecastController.cs",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\Controllers\\WeatherForecastController.cs",
+              "RelativeToolTip": "SwaggerJsonGen\\Controllers\\WeatherForecastController.cs",
+              "ViewState": "AgIAAA0AAAAAAAAAAAAswBUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-27T09:31:09.434Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "WeatherForecast.cs",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\WeatherForecast.cs",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\WeatherForecast.cs",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\WeatherForecast.cs",
+              "RelativeToolTip": "SwaggerJsonGen\\WeatherForecast.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-27T11:53:27.623Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\appsettings.json",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\appsettings.json",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\appsettings.json",
+              "RelativeToolTip": "SwaggerJsonGen\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAnAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-01-28T14:57:55.519Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "spectral.yaml",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\spectral.yaml",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\spectral.yaml",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\spectral.yaml",
+              "RelativeToolTip": "SwaggerJsonGen\\spectral.yaml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003775|",
+              "WhenOpened": "2026-01-27T09:15:37.407Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "SwaggerJsonGen",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "RelativeToolTip": "SwaggerJsonGen\\SwaggerJsonGen.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-01-28T14:47:36.078Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Program.cs",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\Program.cs",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\Program.cs",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\Program.cs",
+              "RelativeToolTip": "SwaggerJsonGen\\Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAeAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-27T09:43:07.018Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "swagger-v1-approved.json",
+              "DocumentMoniker": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\contracts\\swagger-v1-approved.json",
+              "RelativeDocumentMoniker": "SwaggerJsonGen\\contracts\\swagger-v1-approved.json",
+              "ToolTip": "E:\\SwaggerJsonGen\\SwaggerJsonGen\\SwaggerJsonGen\\contracts\\swagger-v1-approved.json",
+              "RelativeToolTip": "SwaggerJsonGen\\contracts\\swagger-v1-approved.json",
+              "ViewState": "AgIAAHkAAAAAAAAAAAAAAH8AAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-01-28T17:29:50.637Z"
+            }
+          ]
+        },
+        {
+          "DockedWidth": 133,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{b38c6cbc-524d-4f30-8a18-936e3104b734}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
