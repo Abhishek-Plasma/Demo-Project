@@ -158,6 +158,7 @@ pipeline {
                             git status
                             git checkout main
                             git pull origin main
+                            git reset --soft origin/main
                         '''
                         
                         // Update the file
