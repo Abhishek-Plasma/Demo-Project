@@ -24,6 +24,10 @@ pipeline {
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        
+        // Define paths
+        SWAGGER_BASELINE = 'SwaggerJsonGen/swagger.json'
+        SWAGGER_GENERATED = 'generated-swagger.json'
     }
 
     stages {
@@ -77,55 +81,78 @@ pipeline {
             }
         }
 
+        stage('Check Baseline Location') {
+            steps {
+                script {
+                    echo "=== CHECKING BASELINE LOCATION ==="
+                    
+                    // Check if swagger.json exists in the project folder
+                    bat '''
+                        @echo off
+                        echo "Looking for baseline swagger.json..."
+                        echo "Checking: SwaggerJsonGen\\swagger.json"
+                        
+                        if exist "SwaggerJsonGen\\swagger.json" (
+                            echo "✅ Found baseline at: SwaggerJsonGen\\swagger.json"
+                            for %%I in ("SwaggerJsonGen\\swagger.json") do echo File size: %%~zI bytes
+                        ) else (
+                            echo "❌ Baseline NOT found at: SwaggerJsonGen\\swagger.json"
+                            echo "Checking workspace root..."
+                            if exist swagger.json (
+                                echo "Found swagger.json in workspace root (not project folder)"
+                            ) else (
+                                echo "No baseline found anywhere"
+                            )
+                        )
+                    '''
+                }
+            }
+        }
+
         stage('Detect Breaking Changes') {
             steps {
                 script {
                     echo "=== DETECTING BREAKING CHANGES ==="
                     echo "Action selected: ${params.BREAKING_CHANGE_ACTION}"
+                    echo "Baseline path: ${env.SWAGGER_BASELINE}"
+                    echo "Generated path: ${env.SWAGGER_GENERATED}"
                     
-                    // Create a breaking changes report file
+                    // Check if baseline exists in project folder
                     bat '''
                         @echo off
-                        echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
-                        echo "Build: %JOB_NAME% #%BUILD_NUMBER%" >> breaking_changes_report.txt
-                        echo "Build URL: %BUILD_URL%" >> breaking_changes_report.txt
-                        echo "Date: %DATE% %TIME%" >> breaking_changes_report.txt
-                        echo. >> breaking_changes_report.txt
-                    '''
-                    
-                    // Check if baseline exists
-                    bat '''
-                        @echo off
-                        echo "Checking for baseline swagger.json..."
-                        if not exist swagger.json (
-                            echo "No baseline found. Creating baseline..." >> breaking_changes_report.txt
-                            echo "No baseline found. Creating baseline..."
-                            copy generated-swagger.json swagger.json
-                            echo "Baseline created from current API." >> breaking_changes_report.txt
-                            echo "Baseline created."
-                            exit /b 0
+                        echo "Checking for baseline in project folder..."
+                        if not exist "SwaggerJsonGen\\swagger.json" (
+                            echo "❌ ERROR: Baseline swagger.json not found in project folder!"
+                            echo "Expected location: SwaggerJsonGen\\swagger.json"
+                            echo.
+                            echo "This file should be committed to git at that location."
+                            echo "If this is the first run, you can:"
+                            echo "1. Run with BREAKING_CHANGE_ACTION=COMMIT to create it"
+                            echo "2. Or manually commit swagger.json to SwaggerJsonGen/ folder"
+                            exit /b 1
                         )
+                        
+                        echo "✅ Baseline exists at SwaggerJsonGen\\swagger.json"
                     '''
                     
-                    // Compare files - don't fail if differences found
+                    // Compare files
                     bat '''
                         @echo off
-                        echo "Comparing with baseline..." >> breaking_changes_report.txt
-                        echo "Comparing with baseline..."
+                        echo "Comparing API definitions..."
+                        echo "Baseline: SwaggerJsonGen\\swagger.json"
+                        echo "Current:  generated-swagger.json"
+                        echo.
                         
-                        rem Always exit with 0, we'll check file existence later
-                        fc swagger.json generated-swagger.json > diff.txt
+                        fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
-                            echo "BREAKING CHANGES DETECTED" >> breaking_changes_report.txt
-                            echo "Differences:" >> breaking_changes_report.txt
-                            echo "=============" >> breaking_changes_report.txt
-                            type diff.txt >> breaking_changes_report.txt
-                            echo "=============" >> breaking_changes_report.txt
-                            echo "BREAKING CHANGES DETECTED"
+                            echo "❌ BREAKING CHANGES DETECTED!"
+                            echo "Differences:"
+                            type diff.txt
+                            echo.
+                            exit /b 0  # Exit with 0 to continue to next stage
                         ) else (
-                            echo "No breaking changes detected" >> breaking_changes_report.txt
-                            echo "No breaking changes detected"
+                            echo "✅ No breaking changes detected"
                             if exist diff.txt del diff.txt
                         )
                     '''
@@ -136,38 +163,37 @@ pipeline {
         stage('Handle Breaking Changes') {
             when {
                 expression { 
-                    // Run this stage if diff.txt exists (breaking changes detected)
+                    // Only run if breaking changes were detected (diff.txt exists)
                     fileExists('diff.txt')
                 }
             }
             steps {
                 script {
                     echo "=== HANDLING BREAKING CHANGES ==="
-                    echo "Breaking changes detected. Action: ${params.BREAKING_CHANGE_ACTION}"
                     
+                    // Read the diff for reporting
                     def diffContent = readFile('diff.txt').trim()
                     
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
-                        echo "COMMIT action selected - updating swagger.json and committing to git..."
+                        echo "COMMIT action selected - updating SwaggerJsonGen/swagger.json and committing to git..."
                         
-                        // Update swagger.json with new version
                         bat '''
                             @echo off
-                            echo "Updating swagger.json with new API version..."
-                            copy generated-swagger.json swagger.json
+                            echo "Step 1: Updating baseline with new API version..."
+                            copy generated-swagger.json SwaggerJsonGen\\swagger.json
                             
-                            echo "Configuring git user..."
+                            echo "Step 2: Configuring git user..."
                             git config user.email "jenkins@example.com"
                             git config user.name "Jenkins CI"
                             
-                            echo "Committing changes..."
-                            git add swagger.json
+                            echo "Step 3: Committing changes..."
+                            git add SwaggerJsonGen\\swagger.json
                             git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
                             
-                            echo "Pushing to repository..."
+                            echo "Step 4: Pushing to repository..."
                             git push origin HEAD
                             
-                            echo "✅ API contract updated and committed"
+                            echo "✅ API contract updated and committed to: SwaggerJsonGen/swagger.json"
                         '''
                         
                         // Send success email
@@ -182,6 +208,7 @@ pipeline {
                                 <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                                 <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                                 <p><b>Commit Message:</b> ${params.COMMIT_MESSAGE}</p>
+                                <p><b>Updated File:</b> SwaggerJsonGen/swagger.json</p>
                                 
                                 <h3>Changes Detected:</h3>
                                 <pre>${diffContent}</pre>
@@ -195,8 +222,23 @@ pipeline {
                     } else if (params.BREAKING_CHANGE_ACTION == 'FAIL') {
                         echo "FAIL action selected - failing pipeline..."
                         
-                        // Fail the build
-                        error("❌ Breaking changes detected. Pipeline failed as per BREAKING_CHANGE_ACTION=FAIL\n\nChanges:\n${diffContent}")
+                        // Fail the build with detailed message
+                        error("""
+                            ❌ BREAKING CHANGES DETECTED!
+                            
+                            Baseline: SwaggerJsonGen/swagger.json
+                            Current:  generated-swagger.json
+                            
+                            Changes:
+                            ${diffContent}
+                            
+                            Action: FAIL (pipeline will fail)
+                            
+                            To fix:
+                            1. Review the breaking changes above
+                            2. If changes are intentional, re-run with BREAKING_CHANGE_ACTION=COMMIT
+                            3. If changes are not intentional, fix your API code
+                        """.stripIndent())
                     }
                 }
             }
@@ -210,8 +252,21 @@ pipeline {
             
             bat '''
                 @echo off
-                echo "Files in workspace:"
-                dir /b *.json *.txt 2>nul || echo "No files found"
+                echo "Workspace contents:"
+                echo "Project folder (SwaggerJsonGen\\swagger.json):"
+                if exist "SwaggerJsonGen\\swagger.json" (
+                    for %%I in ("SwaggerJsonGen\\swagger.json") do echo   %%~zI bytes
+                ) else (
+                    echo "   Not found"
+                )
+                echo "Generated file (generated-swagger.json):"
+                if exist generated-swagger.json (
+                    for %%I in (generated-swagger.json) do echo   %%~zI bytes
+                )
+                echo "Diff file:"
+                if exist diff.txt (
+                    echo "   diff.txt exists"
+                )
             '''
             
             archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
@@ -232,6 +287,7 @@ pipeline {
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                            <p><b>Baseline:</b> SwaggerJsonGen/swagger.json</p>
                         """,
                         to: "${env.EMAIL_RECIPIENTS}",
                         mimeType: 'text/html'
@@ -241,11 +297,11 @@ pipeline {
         }
         
         failure {
-            // This runs when build fails (breaking changes with FAIL action or other errors)
-            echo '❌ Pipeline failed'
+            // This runs when build fails (breaking changes with FAIL action)
+            echo '❌ Pipeline failed - Breaking changes detected'
             
             script {
-                if (fileExists('diff.txt') && params.BREAKING_CHANGE_ACTION == 'FAIL') {
+                if (fileExists('diff.txt')) {
                     def diffContent = readFile('diff.txt').trim()
                     
                     emailext (
@@ -258,6 +314,7 @@ pipeline {
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                            <p><b>Baseline Location:</b> SwaggerJsonGen/swagger.json</p>
                             
                             <h3>Breaking Changes:</h3>
                             <pre>${diffContent}</pre>
@@ -268,38 +325,10 @@ pipeline {
                                 <li><b>If changes are intentional:</b>
                                     <ul>
                                         <li>Re-run the pipeline with <code>BREAKING_CHANGE_ACTION = COMMIT</code></li>
-                                        <li>Or manually update: <code>copy generated-swagger.json swagger.json</code></li>
-                                        <li>Commit to git: <code>git add swagger.json && git commit -m "Update API contract" && git push</code></li>
+                                        <li>This will update <code>SwaggerJsonGen/swagger.json</code> and commit to git</li>
                                     </ul>
                                 </li>
-                                <li><b>If changes are not intentional:</b> Fix the API code</li>
+                                <li><b>If changes are not intentional:</b> Fix the API code in your project</li>
                             </ol>
-                        """,
-                        to: "${env.EMAIL_RECIPIENTS}",
-                        mimeType: 'text/html'
-                    )
-                } else if (fileExists('diff.txt') && params.BREAKING_CHANGE_ACTION == 'COMMIT') {
-                    // This should not happen - if COMMIT action, build should succeed
-                    echo "ERROR: Build failed with COMMIT action - git operations might have failed"
-                } else {
-                    // Generic failure email for other errors
-                    emailext (
-                        subject: "❌ Pipeline Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                        body: """
-                            <h2>Pipeline Failed</h2>
-                            <p>The API validation pipeline has failed.</p>
                             
-                            <p><b>Job:</b> ${env.JOB_NAME}</p>
-                            <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-                            <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                            
-                            <p>Check the build logs for details.</p>
-                        """,
-                        to: "${env.EMAIL_RECIPIENTS}",
-                        mimeType: 'text/html'
-                    )
-                }
-            }
-        }
-    }
-}
+                            <p><b>Note:</b> The baseline is at <code>SwaggerJsonGen/swagger.json
