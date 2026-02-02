@@ -1,86 +1,63 @@
-﻿extends:
+extends:
   - spectral:oas
 
 rules:
-
-
-  operation-summary-required:
+  operation-summary:
     description: Every operation MUST have a summary
     given: $.paths[*][*]
     then:
-      function: truthy
       field: summary
+      function: truthy
     severity: error
 
-  operation-description-optional:
+  operation-description:
     description: Operation description is recommended
     given: $.paths[*][*]
     then:
-      function: truthy
       field: description
+      function: truthy
     severity: warn
 
   info-title:
     description: API info.title is required
-    given: $.info.title
+    given: $.info
     then:
+      field: title
       function: truthy
     severity: error
 
   info-description:
     description: API info.description is required
-    given: $.info.description
+    given: $.info
     then:
+      field: description
       function: truthy
     severity: error
 
   info-version:
     description: API info.version is required
-    given: $.info.version
+    given: $.info
     then:
+      field: version
       function: truthy
     severity: error
-
-  info-contact:
-    description: API info.contact is recommended
-    given: $.info.contact
-    then:
-      function: truthy
-    severity: warn
-
-  operation-summary:
-    description: Each operation should have a summary
-    given: $.paths[*][*]
-    then:
-      function: truthy
-      field: summary
-    severity: warn
-
-  operation-description:
-    description: Each operation should have a description
-    given: $.paths[*][*]
-    then:
-      function: truthy
-      field: description
-    severity: warn
 
   operation-tags:
     description: Operations should include at least one tag
     given: $.paths[*][*]
     then:
-      function: truthy
       field: tags
+      function: truthy
     severity: warn
 
   standard-error-responses:
     description: APIs must define standard error responses (400, 401, 500)
     given: $.paths[*][*].responses
-    then:
-      - function: truthy
-        field: "400"
-      - function: truthy
-        field: "401"
-      - function: truthy
-        field: "500"
     severity: error
-
+    then:
+      - field: "400"
+        function: truthy
+      - field: "401"
+        function: truthy
+      - field: "500"
+        function: truthy
