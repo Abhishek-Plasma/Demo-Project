@@ -174,10 +174,6 @@ pipeline {
                                 echo "Checking git status..."
                                 git checkout main
                                 
-                                REM Clean up any local changes
-                                git clean -fdx
-                                git reset --hard
-                                
                                 REM Pull latest changes
                                 git pull origin main
                                 
