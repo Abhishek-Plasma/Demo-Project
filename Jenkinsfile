@@ -7,8 +7,7 @@ pipeline {
     }
 
     environment {
-        // Email configuration
-        EMAIL_RECIPIENTS = 'tatsatd@plasmacomp.com'  // Change this to your email
+        EMAIL_RECIPIENTS = 'abhishek@example.com'
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
@@ -22,7 +21,6 @@ pipeline {
                     echo "Cleaning up..."
                     if exist generated-swagger.json del generated-swagger.json
                     if exist diff.txt del diff.txt
-                    if exist breaking_changes_report.txt del breaking_changes_report.txt
                 '''
             }
         }
@@ -86,68 +84,60 @@ pipeline {
                             exit /b 0
                         )
                         
-                        echo "Step 2: Create breaking changes report..."
-                        echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
-                        echo "Build: %JOB_NAME% #%BUILD_NUMBER%" >> breaking_changes_report.txt
-                        echo "Build URL: %BUILD_URL%" >> breaking_changes_report.txt
-                        echo "Generated at: %DATE% %TIME%" >> breaking_changes_report.txt
-                        echo. >> breaking_changes_report.txt
-                        
-                        echo "Step 3: Compare file sizes..."
-                        for %%I in (swagger.json) do set baseline=%%~zI
-                        for %%I in (generated-swagger.json) do set current=%%~zI
-                        echo Baseline: !baseline! bytes >> breaking_changes_report.txt
-                        echo Current:  !current! bytes >> breaking_changes_report.txt
-                        echo. >> breaking_changes_report.txt
-                        
-                        if !baseline! == !current! (
-                            echo "File sizes match." >> breaking_changes_report.txt
-                        ) else (
-                            echo "WARNING: File sizes differ!" >> breaking_changes_report.txt
-                        )
-                        
-                        echo. >> breaking_changes_report.txt
-                        echo "Step 4: Simple text comparison..." >> breaking_changes_report.txt
+                        echo "Step 2: Compare files..."
                         fc swagger.json generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
-                            echo "DIFFERENCES FOUND:" >> breaking_changes_report.txt
-                            echo "==================" >> breaking_changes_report.txt
-                            type diff.txt >> breaking_changes_report.txt
-                            echo "==================" >> breaking_changes_report.txt
-                            echo. >> breaking_changes_report.txt
-                            echo "BREAKING CHANGE ALERT: API has changed!" >> breaking_changes_report.txt
-                            
-                            rem Also display on console
-                            type breaking_changes_report.txt
-                            
-                            echo "FAILING THE BUILD - Breaking changes detected!"
+                            echo "❌ BREAKING CHANGES DETECTED!"
+                            echo.
+                            echo "=== REQUIRED ACTION ==="
+                            echo "Your API has breaking changes. To proceed:"
+                            echo.
+                            echo "1. Review the differences:"
+                            type diff.txt
+                            echo.
+                            echo "2. If changes are intentional, update swagger.json:"
+                            echo "   copy generated-swagger.json swagger.json"
+                            echo.
+                            echo "3. Commit the updated swagger.json to git:"
+                            echo "   git add swagger.json"
+                            echo "   git commit -m 'Update API contract'"
+                            echo "   git push"
+                            echo.
+                            echo "4. Re-run this pipeline"
+                            echo.
                             exit /b 1
                         ) else (
-                            echo "No differences found. API is stable." >> breaking_changes_report.txt
+                            echo "✅ No breaking changes detected"
                             if exist diff.txt del diff.txt
                         )
                     '''
+                }
+            }
+        }
+        
+        stage('Validate swagger.json is committed') {
+            when {
+                expression { currentBuild.result == 'SUCCESS' }
+            }
+            steps {
+                script {
+                    // This stage ensures swagger.json is committed to git
+                    echo "Validating that swagger.json is in sync with git..."
                     
-                    // Try oasdiff if available
+                    // Check if swagger.json has uncommitted changes
                     bat '''
                         @echo off
-                        echo.
-                        echo "Step 5: Checking for oasdiff tool..." >> breaking_changes_report.txt
-                        
-                        if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
-                            echo "Found oasdiff, running detailed analysis..." >> breaking_changes_report.txt
-                            "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json >> breaking_changes_report.txt 2>&1
-                            
-                            if errorlevel 1 (
-                                echo "FAILING THE BUILD - Breaking changes detected by oasdiff!" >> breaking_changes_report.txt
-                                exit /b 1
-                            ) else (
-                                echo "No breaking changes detected by oasdiff." >> breaking_changes_report.txt
-                            )
+                        echo "Checking git status of swagger.json..."
+                        git status --porcelain swagger.json 2>nul
+                        if errorlevel 0 (
+                            echo "WARNING: swagger.json has uncommitted changes"
+                            echo "Please commit swagger.json to git:"
+                            echo "  git add swagger.json"
+                            echo "  git commit -m 'Update API contract'"
+                            echo "  git push"
                         ) else (
-                            echo "oasdiff not found. Install it for detailed breaking change analysis." >> breaking_changes_report.txt
-                            echo "Download from: https://github.com/Tufin/oasdiff" >> breaking_changes_report.txt
+                            echo "✅ swagger.json is committed to git"
                         )
                     '''
                 }
@@ -160,76 +150,44 @@ pipeline {
             echo "=== BUILD COMPLETED ==="
             echo "Status: ${currentBuild.currentResult}"
             
-            bat '''
-                @echo off
-                echo.
-                echo "Files in workspace:"
-                dir /b *.json *.txt 2>nul || echo "No JSON or TXT files"
-            '''
-            
-            // Archive everything for review
             archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
         }
-        success {
-            echo '✅ Pipeline completed successfully - No breaking changes'
-            
-            // Send success email (optional)
-            emailext (
-                subject: "✅ SUCCESS: API Validation Passed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    <h2>API Validation Successful</h2>
-                    <p>The API validation pipeline has completed successfully with no breaking changes detected.</p>
-                    <p><b>Job:</b> ${env.JOB_NAME}</p>
-                    <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-                    <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
-                    <p>The generated OpenAPI specification is available in the build artifacts.</p>
-                """,
-                to: "${env.EMAIL_RECIPIENTS}",
-                mimeType: 'text/html'
-            )
-        }
         failure {
-            echo '❌ Pipeline failed - Breaking changes detected'
-            
-            // Read breaking changes report for email
             script {
-                def breakingChangesReport = ""
-                try {
-                    breakingChangesReport = readFile('breaking_changes_report.txt')
-                } catch (Exception e) {
-                    breakingChangesReport = "Breaking changes report not available. Check build logs for details."
-                }
+                def breakingChanges = readFile('diff.txt').trim()
                 
-                // Send failure email with breaking changes details
                 emailext (
-                    subject: "❌ FAILURE: API Breaking Changes Detected - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    subject: "❌ API Breaking Changes - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
                         <h2>🚨 API Breaking Changes Detected</h2>
-                        <p>The API validation pipeline has failed due to breaking changes in the API specification.</p>
+                        <p>The API validation pipeline has failed due to breaking changes.</p>
                         
                         <p><b>Job:</b> ${env.JOB_NAME}</p>
                         <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                         <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                        <p><b>Status:</b> ${currentBuild.currentResult}</p>
-                        
-                        <h3>Breaking Changes Report:</h3>
-                        <pre>${breakingChangesReport}</pre>
                         
                         <h3>Required Action:</h3>
+                        <p>To proceed, you must commit the updated API contract to git:</p>
+                        
                         <ol>
-                            <li>Review the breaking changes listed above</li>
-                            <li>If changes are intentional, update the baseline by running:<br>
-                                <code>copy generated-swagger.json swagger.json</code></li>
-                            <li>If changes are not intentional, fix the API code</li>
-                            <li>Re-run the pipeline</li>
+                            <li><b>Review the breaking changes:</b>
+                                <pre>${breakingChanges}</pre>
+                            </li>
+                            <li><b>Update the baseline:</b><br>
+                                <code>copy generated-swagger.json swagger.json</code>
+                            </li>
+                            <li><b>Commit to git:</b><br>
+                                <code>git add swagger.json</code><br>
+                                <code>git commit -m "Update API contract"</code><br>
+                                <code>git push</code>
+                            </li>
+                            <li><b>Re-run the pipeline</b></li>
                         </ol>
                         
-                        <p>The detailed comparison files are available in the build artifacts.</p>
+                        <p>The generated API specification is available in the build artifacts.</p>
                     """,
                     to: "${env.EMAIL_RECIPIENTS}",
-                    mimeType: 'text/html',
-                    attachLog: true
+                    mimeType: 'text/html'
                 )
             }
         }
