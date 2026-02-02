@@ -10,23 +10,22 @@ pipeline {
         stage('Install Correct Tools Version') {
             steps {
                 script {
-                    // Clean up existing installations
                     bat '''
                         @echo off
                         echo "Cleaning up existing tools..."
                         
-                        # Uninstall any existing versions
+                        rem Uninstall any existing versions
                         dotnet tool uninstall --global Swashbuckle.AspNetCore.Cli 2>nul || echo "No global tool to remove"
                         dotnet tool uninstall Swashbuckle.AspNetCore.Cli 2>nul || echo "No local tool to remove"
                         
-                        # Create fresh tool manifest
+                        rem Create fresh tool manifest
                         dotnet new tool-manifest --force
                         
-                        # Install version compatible with .NET 8.0
+                        rem Install version compatible with .NET 8.0
                         echo "Installing Swashbuckle CLI version 6.6.2 (compatible with .NET 8.0)..."
                         dotnet tool install Swashbuckle.AspNetCore.Cli --version 6.6.2
                         
-                        # Also install globally for backup
+                        rem Also install globally for backup
                         dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
                     '''
                 }
@@ -47,7 +46,11 @@ pipeline {
                     dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj /p:RunApiContractChecks=false
                     
                     echo "Build completed. Checking output..."
-                    dir "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" || echo "DLL not found!"
+                    if exist "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" (
+                        echo "DLL found successfully!"
+                    ) else (
+                        echo "ERROR: DLL not found!"
+                    )
                 '''
             }
         }
@@ -58,23 +61,24 @@ pipeline {
                     @echo off
                     echo "Generating swagger.json..."
                     
-                    # Check if DLL exists
+                    rem Check if DLL exists
                     if not exist "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" (
                         echo "ERROR: DLL not found at expected location!"
-                        exit 1
+                        exit /b 1
                     )
                     
                     echo "DLL path: SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll"
                     
-                    # Try with local tool first, then global
+                    rem Try with local tool first, then global
                     dotnet swagger tofile --output generated-swagger.json "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" v1
                     
                     if exist generated-swagger.json (
                         echo "Successfully generated swagger.json"
-                        type generated-swagger.json | find /i "openapi" | head -1
+                        echo "First few lines of swagger.json:"
+                        type generated-swagger.json | findstr /i "openapi" | findstr /v /c:""
                     ) else (
                         echo "ERROR: Failed to generate swagger.json"
-                        exit 1
+                        exit /b 1
                     )
                 '''
             }
@@ -88,7 +92,7 @@ pipeline {
                     if exist generated-swagger.json (
                         echo "Found generated-swagger.json, proceeding with linting"
                         
-                        # Check if spectral.yaml exists
+                        rem Check if spectral.yaml exists
                         if exist spectral.yaml (
                             echo "Running spectral lint..."
                             npx @stoplight/spectral-cli lint generated-swagger.json -r spectral.yaml
@@ -97,7 +101,7 @@ pipeline {
                         )
                     ) else (
                         echo "ERROR: generated-swagger.json not found!"
-                        exit 1
+                        exit /b 1
                     )
                 '''
             }
@@ -109,11 +113,11 @@ pipeline {
                     @echo off
                     echo "Checking for breaking changes..."
                     
-                    # Check if oasdiff exists
+                    rem Check if oasdiff exists
                     if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
                         echo "Found oasdiff, checking for baseline swagger.json..."
                         
-                        # Check if baseline exists
+                        rem Check if baseline exists
                         if exist swagger.json (
                             echo "Running breaking change check..."
                             "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json
