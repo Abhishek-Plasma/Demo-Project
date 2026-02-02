@@ -168,18 +168,11 @@ pipeline {
                             copy generated-swagger.json SwaggerJsonGen\\swagger.json
                         '''
                         
-                        // Pull latest changes to avoid conflicts
-                        bat '''
-                            @echo off
-                            echo "Pulling latest changes..."
-                            git pull origin main --no-rebase
-                        '''
-                        
                         // Commit and push
                         bat '''
                             @echo off
                             echo "Committing and pushing changes..."
-                            git add SwaggerJsonGen\\swagger.json
+                            git add swagger.json
                             git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
                             git push
                             echo "✅ Changes committed and pushed to repository"
