@@ -155,7 +155,7 @@ pipeline {
                         bat '''
                             @echo off
                             echo "Checking git status..."
-                            git status --short
+                            git status
                             echo "Current branch:"
                             git branch --show-current || echo "Detached HEAD"
                         '''
