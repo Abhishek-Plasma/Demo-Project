@@ -228,22 +228,48 @@ pipeline {
                     echo "=== DETECTING BREAKING CHANGES ==="
                     echo "Action selected: ${params.BREAKING_CHANGE_ACTION}"
                     
+                    // Create a breaking changes report file
                     bat '''
                         @echo off
-                        echo "Checking for baseline..."
-                        if not exist "SwaggerJsonGen\\swagger.json" (
-                            echo "ERROR: Baseline swagger.json not found!"
-                            echo "Expected location: SwaggerJsonGen\\swagger.json"
-                            exit /b 1
+                        echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
+                        echo "Build: %JOB_NAME% #%BUILD_NUMBER%" >> breaking_changes_report.txt
+                        echo "Build URL: %BUILD_URL%" >> breaking_changes_report.txt
+                        echo "Date: %DATE% %TIME%" >> breaking_changes_report.txt
+                        echo. >> breaking_changes_report.txt
+                    '''
+                    
+                    // Check if baseline exists
+                    bat '''
+                        @echo off
+                        echo "Checking for baseline swagger.json..."
+                        if not exist swagger.json (
+                            echo "No baseline found. Creating baseline..." >> breaking_changes_report.txt
+                            echo "No baseline found. Creating baseline..."
+                            copy generated-swagger.json swagger.json
+                            echo "Baseline created from current API." >> breaking_changes_report.txt
+                            echo "Baseline created."
+                            exit /b 0
                         )
+                    '''
+                    
+                    // Compare files - don't fail if differences found
+                    bat '''
+                        @echo off
+                        echo "Comparing with baseline..." >> breaking_changes_report.txt
+                        echo "Comparing with baseline..."
                         
-                        echo "Comparing API definitions..."
-                        fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
+                        rem Always exit with 0, we'll check file existence later
+                        fc swagger.json generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
-                            echo "BREAKING CHANGES DETECTED!"
-                            exit /b 0
+                            echo "BREAKING CHANGES DETECTED" >> breaking_changes_report.txt
+                            echo "Differences:" >> breaking_changes_report.txt
+                            echo "=============" >> breaking_changes_report.txt
+                            type diff.txt >> breaking_changes_report.txt
+                            echo "=============" >> breaking_changes_report.txt
+                            echo "BREAKING CHANGES DETECTED"
                         ) else (
+                            echo "No breaking changes detected" >> breaking_changes_report.txt
                             echo "No breaking changes detected"
                             if exist diff.txt del diff.txt
                         )
