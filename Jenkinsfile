@@ -157,6 +157,7 @@ pipeline {
                             echo "Checking git status..."
                             git checkout main
                             git pull
+                            git reset
                             git status
                         '''
                         
