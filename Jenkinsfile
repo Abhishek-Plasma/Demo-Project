@@ -156,8 +156,8 @@ pipeline {
                             @echo off
                             echo "Checking git status..."
                             git status
-                            echo "Current branch:"
-                            git branch --show-current || echo "Detached HEAD"
+                            git checkout main
+                            git pull origin main
                         '''
                         
                         // Update the file
