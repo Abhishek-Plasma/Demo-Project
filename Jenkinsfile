@@ -7,7 +7,7 @@ pipeline {
     }
 
     stages {
-        stage('Install Correct Tools Version') {
+        stage('Install Tools') {
             steps {
                 script {
                     bat '''
@@ -75,8 +75,9 @@ pipeline {
                     if exist generated-swagger.json (
                         echo "Successfully generated swagger.json"
                         rem Check file size
-                        for %%I in (generated-swagger.json) do set size=%%~zI
-                        echo "File size: !size! bytes"
+                        for %%I in (generated-swagger.json) do (
+                            echo File size: %%~zI bytes
+                        )
                     ) else (
                         echo "ERROR: Failed to generate swagger.json"
                         exit /b 1
@@ -85,41 +86,66 @@ pipeline {
             }
         }
 
+        stage('Setup Spectral Config') {
+            steps {
+                bat '''
+                    @echo off
+                    echo "Setting up spectral.yaml configuration..."
+                    
+                    rem Check if spectral.yaml exists and has content
+                    if exist spectral.yaml (
+                        for %%I in (spectral.yaml) do (
+                            if %%~zI LSS 10 (
+                                echo "spectral.yaml is too small, creating default..."
+                                goto createDefault
+                            ) else (
+                                echo "spectral.yaml exists with size %%~zI bytes"
+                                type spectral.yaml
+                                goto continue
+                            )
+                        )
+                    ) else (
+                        :createDefault
+                        echo "Creating default spectral.yaml..."
+                        echo extends: spectral:oas > spectral.yaml
+                        echo. >> spectral.yaml
+                        echo rules: >> spectral.yaml
+                        echo "  info-contact:" >> spectral.yaml
+                        echo "    description: Info should contain contact information" >> spectral.yaml
+                        echo "    given: ^.info" >> spectral.yaml
+                        echo "    then:" >> spectral.yaml
+                        echo "      field: contact" >> spectral.yaml
+                        echo "      function: truthy" >> spectral.yaml
+                        echo "    severity: warn" >> spectral.yaml
+                        echo "Default spectral.yaml created"
+                    )
+                    :continue
+                '''
+            }
+        }
+
         stage('Lint Swagger') {
             steps {
-                script {
-                    // First, let's create a valid spectral.yaml
-                    bat '''
-                        @echo off
-                        echo "Creating a valid spectral.yaml configuration..."
-                        echo extends: spectral:oas > spectral-fixed.yaml
-                        echo rules: {} >> spectral-fixed.yaml
-                        
-                        echo "Testing with minimal ruleset first..."
-                        if exist generated-swagger.json (
-                            npx @stoplight/spectral-cli lint generated-swagger.json -r spectral-fixed.yaml --verbose
-                        )
-                    '''
+                bat '''
+                    @echo off
+                    echo "Linting generated-swagger.json..."
                     
-                    // Now try with the actual spectral.yaml
-                    bat '''
-                        @echo off
-                        echo "Now trying with the actual spectral.yaml..."
-                        if exist spectral.yaml (
-                            echo "Found spectral.yaml, checking its content..."
-                            type spectral.yaml
-                            echo.
-                            echo "Running spectral lint with actual rules..."
-                            npx @stoplight/spectral-cli lint generated-swagger.json -r spectral.yaml || (
-                                echo "Spectral lint failed, but continuing build..."
-                                echo "You may need to fix the spectral.yaml rules"
-                            )
-                        ) else (
-                            echo "No spectral.yaml found, using default rules..."
-                            npx @stoplight/spectral-cli lint generated-swagger.json
-                        )
-                    '''
-                }
+                    if not exist generated-swagger.json (
+                        echo "ERROR: generated-swagger.json not found!"
+                        exit /b 1
+                    )
+                    
+                    if not exist spectral.yaml (
+                        echo "ERROR: spectral.yaml not found!"
+                        exit /b 1
+                    )
+                    
+                    echo "Running spectral lint..."
+                    npx @stoplight/spectral-cli lint generated-swagger.json -r spectral.yaml || (
+                        echo "WARNING: Spectral linting failed or found issues"
+                        echo "This is a warning, not a failure - continuing build..."
+                    )
+                '''
             }
         }
 
@@ -129,27 +155,31 @@ pipeline {
                     @echo off
                     echo "Checking for breaking changes..."
                     
+                    rem First, make sure we have the generated file
+                    if not exist generated-swagger.json (
+                        echo "ERROR: No generated-swagger.json to compare"
+                        exit /b 0  rem Exit with 0 to not fail the build
+                    )
+                    
+                    rem Check if baseline exists
+                    if not exist swagger.json (
+                        echo "No baseline swagger.json found. Creating baseline..."
+                        copy generated-swagger.json swagger.json
+                        echo "Created baseline swagger.json from generated file"
+                        exit /b 0
+                    )
+                    
                     rem Check if oasdiff exists
                     if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
-                        echo "Found oasdiff, checking for baseline swagger.json..."
-                        
-                        rem Check if baseline exists
-                        if exist swagger.json (
-                            echo "Running breaking change check..."
-                            "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json || (
-                                echo "Breaking changes detected or oasdiff error"
-                                rem Don't fail the build for breaking changes during development
-                                echo "Continuing build despite breaking changes..."
-                            )
-                        ) else (
-                            echo "WARNING: No baseline swagger.json found. This is the first run?"
-                            echo "Copying generated-swagger.json as baseline..."
-                            copy generated-swagger.json swagger.json
-                            echo "Created baseline swagger.json"
+                        echo "Running oasdiff breaking change check..."
+                        "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json && (
+                            echo "No breaking changes detected"
+                        ) || (
+                            echo "Breaking changes detected or oasdiff error"
+                            echo "This is a warning during development"
                         )
                     ) else (
-                        echo "WARNING: oasdiff not installed at C:\\Program Files\\oasdiff\\oasdiff.exe"
-                        echo "Skipping breaking change check"
+                        echo "INFO: oasdiff not found at default location, skipping breaking change check"
                     )
                 '''
             }
@@ -158,24 +188,29 @@ pipeline {
 
     post {
         always {
-            echo "Build status: ${currentBuild.currentResult}"
+            echo "Build completed with status: ${currentBuild.currentResult}"
             bat '''
                 @echo off
-                echo "Workspace contents:"
+                echo "Final workspace contents:"
                 dir /b *.json 2>nul || echo "No JSON files found"
                 echo.
-                echo "generated-swagger.json first line with 'openapi':"
+                echo "Preview of generated-swagger.json (first 3 lines):"
                 if exist generated-swagger.json (
-                    for /f "tokens=*" %%i in ('findstr /i "openapi" generated-swagger.json') do (
-                        echo %%i
-                        goto :done
+                    setlocal enabledelayedexpansion
+                    set count=0
+                    for /f "tokens=*" %%a in (generated-swagger.json) do (
+                        echo %%a
+                        set /a count+=1
+                        if !count! equ 3 goto :break
                     )
-                    :done
+                    :break
+                    endlocal
                 )
             '''
         }
         success {
             echo '✅ Swagger validation passed'
+            archiveArtifacts artifacts: 'generated-swagger.json', allowEmptyArchive: true
         }
         failure {
             echo '❌ Swagger validation failed'
