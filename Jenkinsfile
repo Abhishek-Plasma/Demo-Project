@@ -62,20 +62,6 @@ pipeline {
             }
         }
 
-        stage('Verify .NET Installation') {
-            steps {
-                bat '''
-                    @echo off
-                    echo "Checking .NET installation..."
-                    dotnet --version
-                    dotnet --list-sdks
-                    dotnet --list-runtimes
-                    echo "Dotnet tools directory:"
-                    dir "%USERPROFILE%\\.dotnet\\tools" 2>nul || echo "Dotnet tools directory not found"
-                '''
-            }
-        }
-
         stage('Install Tools') {
             steps {
                 bat '''
@@ -99,18 +85,20 @@ pipeline {
                         echo "Swashbuckle CLI is already installed"
                     )
                     
-                    REM Show where the tool is installed
-                    echo "Looking for dotnet-swagger..."
-                    where dotnet-swagger
+                    REM Show where the tool is installed - use swagger.exe, not dotnet-swagger
+                    echo "Looking for swagger.exe..."
+                    where swagger
                     if errorlevel 1 (
-                        echo "dotnet-swagger not found in PATH"
+                        echo "swagger not found in PATH"
                         echo "Trying to find it in dotnet tools directory..."
-                        if exist "%USERPROFILE%\\.dotnet\\tools\\dotnet-swagger.exe" (
-                            echo "Found at: %USERPROFILE%\\.dotnet\\tools\\dotnet-swagger.exe"
+                        if exist "%USERPROFILE%\\.dotnet\\tools\\swagger.exe" (
+                            echo "Found at: %USERPROFILE%\\.dotnet\\tools\\swagger.exe"
                         ) else (
                             echo "Not found in dotnet tools directory"
                         )
                     )
+                    
+                    echo "Swashbuckle CLI installation completed successfully"
                 '''
             }
         }
@@ -144,52 +132,20 @@ pipeline {
                     
                     REM Try multiple methods to generate swagger
                     
-                    REM Method 1: Try dotnet swagger command
-                    echo "Method 1: Using 'dotnet swagger' command..."
-                    dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    REM Method 1: Try swagger command directly (it's swagger.exe, not dotnet-swagger)
+                    echo "Method 1: Using 'swagger' command..."
+                    swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
                     
-                    REM Method 2: If method 1 fails, try dotnet-swagger directly
+                    REM Method 2: If method 1 fails, try dotnet swagger command
                     if not exist generated-swagger.json (
-                        echo "Method 2: Using 'dotnet-swagger' directly..."
-                        dotnet-swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                        echo "Method 2: Using 'dotnet swagger' command..."
+                        dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
                     )
                     
                     REM Method 3: If method 2 fails, try with full path
                     if not exist generated-swagger.json (
-                        echo "Method 3: Using full path to dotnet-swagger..."
-                        "%USERPROFILE%\\.dotnet\\tools\\dotnet-swagger.exe" tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    )
-                    
-                    REM Method 4: If all else fails, create a simple programmatic approach
-                    if not exist generated-swagger.json (
-                        echo "Method 4: Creating custom swagger generator..."
-                        
-                        REM Create a simple C# console app to generate swagger
-                        echo using System; > SwaggerGenerator.cs
-                        echo using System.IO; >> SwaggerGenerator.cs
-                        echo using System.Reflection; >> SwaggerGenerator.cs
-                        echo using Microsoft.OpenApi; >> SwaggerGenerator.cs
-                        echo using Microsoft.OpenApi.Models; >> SwaggerGenerator.cs
-                        echo using Swashbuckle.AspNetCore.Swagger; >> SwaggerGenerator.cs
-                        echo public class Program { >> SwaggerGenerator.cs
-                        echo     public static void Main() { >> SwaggerGenerator.cs
-                        echo         Console.WriteLine("Swagger generation placeholder"); >> SwaggerGenerator.cs
-                        echo         File.WriteAllText("generated-swagger.json", "{\\"openapi\\":\\"3.0.1\\",\\"info\\":{\\"title\\":\\"API\\",\\"version\\":\\"1.0\\"},\\"paths\\":{}}"); >> SwaggerGenerator.cs
-                        echo     } >> SwaggerGenerator.cs
-                        echo } >> SwaggerGenerator.cs
-                        
-                        REM Compile and run it
-                        dotnet new console -n TempSwaggerGen --force 2>nul
-                        copy SwaggerGenerator.cs TempSwaggerGen\\Program.cs 2>nul
-                        cd TempSwaggerGen
-                        dotnet add package Swashbuckle.AspNetCore.Swagger --version 6.5.0 2>nul
-                        dotnet run 2>nul
-                        cd ..
-                        if exist TempSwaggerGen\\generated-swagger.json (
-                            copy TempSwaggerGen\\generated-swagger.json .
-                        )
-                        rmdir /s /q TempSwaggerGen 2>nul
-                        del SwaggerGenerator.cs 2>nul
+                        echo "Method 3: Using full path to swagger..."
+                        "%USERPROFILE%\\.dotnet\\tools\\swagger.exe" tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
                     )
                     
                     if exist generated-swagger.json (
@@ -372,7 +328,7 @@ pipeline {
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                         """,
                         to: "${env.EMAIL_RECIPIENTS}",
-                        mimeType: 'text/html'
+                            mimeType: 'text/html'
                     )
                 }
             }
