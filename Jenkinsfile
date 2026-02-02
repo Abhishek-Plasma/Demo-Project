@@ -180,7 +180,7 @@ pipeline {
                             echo "Committing and pushing changes..."
                             git add SwaggerJsonGen\\swagger.json
                             git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
-                            git push origin
+                            git push
                             echo "✅ Changes committed and pushed to repository"
                         '''
                         
