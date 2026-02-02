@@ -31,13 +31,25 @@ pipeline {
     stages {
         stage('Setup Git Configuration') {
             steps {
-                bat '''
-                    @echo off
-                    echo "Configuring git user..."
-                    git config --global user.email "abhishekk@plasmacomp.com"
-                    git config --global user.name "Abhishek-Plasma"
-                    git config --global push.default simple
-                '''
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-token',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    bat '''
+                        @echo off
+                        echo "Configuring git user..."
+                        git config --global user.email "abhishekk@plasmacomp.com"
+                        git config --global user.name "Abhishek-Plasma"
+                        git config --global push.default simple
+                        
+                        REM Set up credential helper
+                        git config --global credential.helper store
+                        
+                        REM Create credential file
+                        echo https://%GIT_USER%:%GIT_TOKEN%@github.com > "%USERPROFILE%\\.git-credentials"
+                    '''
+                }
             }
         }
 
@@ -151,46 +163,49 @@ pipeline {
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
                         echo "COMMIT action selected - updating swagger.json..."
                         
-                        // First, check if we're on a branch or detached HEAD
-                        bat '''
-                            @echo off
-                            echo "Checking git status..."
-                            git checkout main
-                            git pull
-                            git fetch origin
-                            git reset --hard origin/main
-                            git status
-                        '''
-                        
-                        // Update the file
-                        bat '''
-                            @echo off
-                            echo "Updating SwaggerJsonGen\\swagger.json..."
-                            copy generated-swagger.json SwaggerJsonGen\\swagger.json
-                        '''
-                        
-                        // Commit changes
-                        bat '''
-                            @echo off
-                            echo "Committing changes..."
-                            git add SwaggerJsonGen/swagger.json
-                            git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
-                        '''
-                        
-                        // Push changes with credentials
                         withCredentials([usernamePassword(
                             credentialsId: 'github-token',
                             usernameVariable: 'GIT_USER',
                             passwordVariable: 'GIT_TOKEN'
                         )]) {
+                            // First, check if we're on a branch or detached HEAD
+                            bat '''
+                                @echo off
+                                echo "Checking git status..."
+                                git checkout main
+                                
+                                REM Clean up any local changes
+                                git clean -fdx
+                                git reset --hard
+                                
+                                REM Pull latest changes
+                                git pull origin main
+                                
+                                git status
+                            '''
+                            
+                            // Update the file
+                            bat '''
+                                @echo off
+                                echo "Updating SwaggerJsonGen\\swagger.json..."
+                                copy generated-swagger.json SwaggerJsonGen\\swagger.json /Y
+                            '''
+                            
+                            // Commit changes
                             bat """
                                 @echo off
+                                echo "Committing changes..."
+                                git add SwaggerJsonGen/swagger.json
+                                git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
+                            """
+                            
+                            // Push changes using stored credentials
+                            bat '''
+                                @echo off
                                 echo "Pushing to remote..."
-                                echo "${GIT_USER}:${GIT_TOKEN}"
-                                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
                                 git push origin main
                                 echo "✅ Changes pushed successfully"
-                            """
+                            '''
                         }
                         
                         echo "✅ Changes committed and pushed to repository"
@@ -248,6 +263,18 @@ pipeline {
         }
         failure {
             echo 'Pipeline failed'
+            emailext (
+                subject: "Build Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <h2>Build Failed</h2>
+                    <p><b>Job:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                    <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
+                """,
+                to: "${env.EMAIL_RECIPIENTS}",
+                mimeType: 'text/html'
+            )
         }
     }
 }
