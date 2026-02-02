@@ -184,6 +184,7 @@ pipeline {
                             bat """
                                 @echo off
                                 echo "Pushing to remote..."
+                                echo "${GIT_USER}:${GIT_TOKEN}"
                                 git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
                                 git push origin main
                                 echo "✅ Changes pushed successfully"
