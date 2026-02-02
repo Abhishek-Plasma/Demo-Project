@@ -192,76 +192,35 @@ pipeline {
         }
 
         stage('Lint Swagger with Spectral') {
-            steps {
-                script {
-                    echo "=== LINTING SWAGGER WITH SPECTRAL ==="
-                    
-                    bat '''
-                        @echo off
-                        echo "Checking for generated swagger.json..."
-                        if not exist generated-swagger.json (
-                            echo "ERROR: generated-swagger.json not found!"
-                            exit /b 1
-                        )
-                        
-                        echo "Linting swagger.json with Spectral..."
-                        
-                        REM First, check if Spectral is installed
-                        where spectral >nul 2>nul
-                        if errorlevel 1 (
-                            echo "Spectral not found. Attempting to install..."
-                            npm install -g @stoplight/spectral-cli
-                            
-                            REM Verify installation
-                            where spectral >nul 2>nul
-                            if errorlevel 1 (
-                                echo "WARNING: Spectral installation may have failed"
-                                echo "Skipping Spectral linting..."
-                                exit /b 0
-                            )
-                        )
-                        
-                        REM Check if spectral.yaml exists, if not create a simple one
-                        if not exist spectral.yaml (
-                            echo "spectral.yaml not found. Creating simple Spectral ruleset..."
-                            
-                            REM Create a simple spectral.yaml using a different approach
-                            REM Use a temporary file first to avoid file lock issues
-                            set "TEMP_YAML=%TEMP%\\spectral_temp.yaml"
-                            
-                            echo extends: spectral:oas > "%TEMP_YAML%"
-                            echo rules: >> "%TEMP_YAML%"
-                            echo   info-contact: warn >> "%TEMP_YAML%"
-                            echo   operation-tags: warn >> "%TEMP_YAML%"
-                            echo   no-eval-in-descriptions: error >> "%TEMP_YAML%"
-                            
-                            REM Copy the temporary file to the workspace
-                            copy "%TEMP_YAML%" spectral.yaml
-                            del "%TEMP_YAML%"
-                            
-                            echo "Created spectral.yaml"
-                        )
-                        
-                        REM Run Spectral lint with a timeout to avoid hanging
-                        echo "Running Spectral lint..."
-                        
-                        REM First, try to run spectral with a simpler command
-                        spectral lint generated-swagger.json --ruleset spectral.yaml > spectral-report.txt 2>&1
-                        
-                        REM Check the exit code
-                        if errorlevel 1 (
-                            echo "Spectral found issues in the API definition."
-                            echo "Spectral Report:"
-                            type spectral-report.txt
-                            echo "Continuing with pipeline despite Spectral warnings..."
-                        ) else (
-                            echo "✓ Spectral linting passed - no issues found"
-                            if exist spectral-report.txt del spectral-report.txt
-                        )
-                    '''
-                }
-            }
+    steps {
+        script {
+            echo "=== LINTING SWAGGER WITH SPECTRAL ==="
+            bat '''
+                @echo off
+
+                if not exist generated-swagger.json (
+                    echo ERROR: generated-swagger.json not found
+                    exit /b 1
+                )
+
+                if not exist SwaggerJsonGen\\spectral.yaml (
+                    echo ERROR: Spectral ruleset not found at SwaggerJsonGen\\spectral.yaml
+                    exit /b 1
+                )
+
+                echo Running Spectral lint...
+                spectral lint generated-swagger.json -r SwaggerJsonGen\\spectral.yaml
+
+                REM Do not fail pipeline on lint warnings
+                if errorlevel 1 (
+                    echo Spectral found issues (warnings/errors)
+                ) else (
+                    echo ✓ Spectral lint passed
+                )
+            '''
         }
+    }
+}
 
         stage('Detect Breaking Changes') {
             steps {
