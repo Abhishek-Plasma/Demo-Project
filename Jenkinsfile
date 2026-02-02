@@ -24,9 +24,23 @@ pipeline {
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        GIT_AUTHOR_EMAIL = 'abhishekk@plasmacomp.com'
+        GIT_AUTHOR_NAME = 'Abhishek-Plasma'
     }
 
     stages {
+        stage('Setup Git Configuration') {
+            steps {
+                bat '''
+                    @echo off
+                    echo "Configuring git user..."
+                    git config --global user.email "abhishekk@plasmacomp.com"
+                    git config --global user.name "Abhishek-Plasma"
+                    git config --global push.default simple
+                '''
+            }
+        }
+
         stage('Clean Workspace') {
             steps {
                 bat '''
@@ -137,6 +151,15 @@ pipeline {
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
                         echo "COMMIT action selected - updating swagger.json..."
                         
+                        // First, check if we're on a branch or detached HEAD
+                        bat '''
+                            @echo off
+                            echo "Checking git status..."
+                            git status --short
+                            echo "Current branch:"
+                            git branch --show-current || echo "Detached HEAD"
+                        '''
+                        
                         // Update the file
                         bat '''
                             @echo off
@@ -144,13 +167,27 @@ pipeline {
                             copy generated-swagger.json SwaggerJsonGen\\swagger.json
                         '''
                         
-                        // Commit and push in one step
+                        // Checkout main branch first (we might be in detached HEAD)
+                        bat '''
+                            @echo off
+                            echo "Ensuring we're on main branch..."
+                            git checkout main 2>nul || git checkout -b main
+                        '''
+                        
+                        // Pull latest changes to avoid conflicts
+                        bat '''
+                            @echo off
+                            echo "Pulling latest changes..."
+                            git pull origin main --no-rebase
+                        '''
+                        
+                        // Commit and push
                         bat '''
                             @echo off
                             echo "Committing and pushing changes..."
                             git add SwaggerJsonGen\\swagger.json
                             git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
-                            git push origin HEAD
+                            git push origin main
                             echo "✅ Changes committed and pushed to repository"
                         '''
                         
