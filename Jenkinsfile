@@ -157,9 +157,7 @@ pipeline {
                             echo "Checking git status..."
                             git checkout main
                             git pull
-                            git reset --soft origin/main
                             git status
-                            git pull
                         '''
                         
                         // Update the file
@@ -169,28 +167,30 @@ pipeline {
                             copy generated-swagger.json SwaggerJsonGen\\swagger.json
                         '''
                         
-                        // Commit and push
+                        // Commit changes
                         bat '''
-                            echo "Committing and pushing changes..."
+                            @echo off
+                            echo "Committing changes..."
                             git add SwaggerJsonGen/swagger.json
-                            git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
-
-                            withCredentials([usernamePassword(
-                                credentialsId: 'github-token',
-                                usernameVariable: 'GIT_USER',
-                                passwordVariable: 'GIT_TOKEN'
-                            )]) {
-                                bat '''
-                                    @echo off
-                                    set GIT_TERMINAL_PROMPT=0
-
-                                    git remote set-url origin https://%GIT_USER%:%GIT_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git
-
-                                    git push
-                                    '''
-                                }
-                            echo "✅ Changes committed and pushed to repository"
+                            git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
                         '''
+                        
+                        // Push changes with credentials
+                        withCredentials([usernamePassword(
+                            credentialsId: 'github-token',
+                            usernameVariable: 'GIT_USER',
+                            passwordVariable: 'GIT_TOKEN'
+                        )]) {
+                            bat """
+                                @echo off
+                                echo "Pushing to remote..."
+                                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
+                                git push origin main
+                                echo "✅ Changes pushed successfully"
+                            """
+                        }
+                        
+                        echo "✅ Changes committed and pushed to repository"
                         
                         // Send success email
                         emailext (
@@ -235,6 +235,7 @@ pipeline {
                             <p>No breaking changes detected in the API.</p>
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                            <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                         """,
                         to: "${env.EMAIL_RECIPIENTS}",
                         mimeType: 'text/html'
