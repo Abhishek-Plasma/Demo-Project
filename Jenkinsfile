@@ -172,7 +172,7 @@ pipeline {
                         bat '''
                             @echo off
                             echo "Committing and pushing changes..."
-                            git add swagger.json
+                            git add SwaggerJsonGen/swagger.json
                             git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
                             git push
                             echo "✅ Changes committed and pushed to repository"
