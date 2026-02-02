@@ -26,31 +26,18 @@ pipeline {
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
         GIT_AUTHOR_EMAIL = 'abhishekk@plasmacomp.com'
         GIT_AUTHOR_NAME = 'Abhishek-Plasma'
-        DOTNET_CLI_HOME = 'C:\\ProgramData\\dotnet'  // Explicitly set dotnet home
     }
 
     stages {
         stage('Setup Git Configuration') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'github-token',
-                    usernameVariable: 'GIT_USER',
-                    passwordVariable: 'GIT_TOKEN'
-                )]) {
-                    bat '''
-                        @echo off
-                        echo "Configuring git user..."
-                        git config --global user.email "abhishekk@plasmacomp.com"
-                        git config --global user.name "Abhishek-Plasma"
-                        git config --global push.default simple
-                        
-                        REM Set up credential helper
-                        git config --global credential.helper store
-                        
-                        REM Create credential file
-                        echo https://%GIT_USER%:%GIT_TOKEN%@github.com > "%USERPROFILE%\\.git-credentials"
-                    '''
-                }
+                bat '''
+                    @echo off
+                    echo "Configuring git user..."
+                    git config --global user.email "abhishekk@plasmacomp.com"
+                    git config --global user.name "Abhishek-Plasma"
+                    git config --global push.default simple
+                '''
             }
         }
 
@@ -70,19 +57,7 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Installing Swashbuckle CLI..."
-                    
-                    REM Check if dotnet tool is already installed
-                    dotnet tool list --global | findstr swashbuckle
-                    if errorlevel 1 (
-                        echo "Installing Swashbuckle CLI..."
-                        dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
-                    ) else (
-                        echo "Swashbuckle CLI is already installed"
-                    )
-                    
-                    REM Update PATH to include dotnet tools
-                    set PATH=%USERPROFILE%\\.dotnet\\tools;%PATH%
-                    echo "Updated PATH: %PATH%"
+                    dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
                 '''
             }
         }
@@ -92,7 +67,7 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Building project..."
-                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj --configuration Debug
+                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj
                 '''
             }
         }
@@ -102,39 +77,12 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Generating swagger.json..."
-                    
-                    REM Update PATH to ensure dotnet tools are available
-                    set PATH=%USERPROFILE%\\.dotnet\\tools;%PATH%
-                    
-                    REM First, check if the tool is available
-                    where dotnet-swagger
-                    if errorlevel 1 (
-                        echo "ERROR: dotnet-swagger not found in PATH"
-                        echo "Trying alternate method..."
-                    )
-                    
-                    REM Try multiple ways to run swagger generation
-                    echo "Attempt 1: Using dotnet swagger command..."
                     dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    
-                    if not exist generated-swagger.json (
-                        echo "Attempt 2: Using dotnet-swagger directly..."
-                        dotnet-swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    )
-                    
-                    if not exist generated-swagger.json (
-                        echo "Attempt 3: Using full path to dotnet-swagger..."
-                        "%USERPROFILE%\\.dotnet\\tools\\dotnet-swagger.exe" tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    )
-                    
                     if exist generated-swagger.json (
                         echo "SUCCESS: Swagger file generated"
                         for %%I in (generated-swagger.json) do echo File size: %%~zI bytes
                     ) else (
                         echo "ERROR: Failed to generate swagger"
-                        echo "DLL Path: SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll"
-                        echo "Current Directory: %CD%"
-                        echo "PATH: %PATH%"
                         exit /b 1
                     )
                 '''
@@ -175,24 +123,14 @@ pipeline {
                         )
                         
                         echo "Comparing API definitions..."
-                        REM Use a proper diff tool or PowerShell for better comparison
-                        powershell -Command "Compare-Object (Get-Content 'SwaggerJsonGen\\swagger.json') (Get-Content 'generated-swagger.json') | Out-File 'diff.txt' -Encoding ASCII"
+                        fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
                         
-                        if exist diff.txt (
-                            REM Check if diff.txt has content
-                            for /f %%i in ('powershell -Command "(Get-Content 'diff.txt' | Measure-Object -Line).Lines"') do set lineCount=%%i
-                            if !lineCount! GTR 0 (
-                                echo "BREAKING CHANGES DETECTED!"
-                                type diff.txt
-                                exit /b 0
-                            ) else (
-                                echo "No breaking changes detected"
-                                del diff.txt
-                                exit /b 0
-                            )
+                        if errorlevel 1 (
+                            echo "BREAKING CHANGES DETECTED!"
+                            exit /b 0
                         ) else (
                             echo "No breaking changes detected"
-                            exit /b 0
+                            if exist diff.txt del diff.txt
                         )
                     '''
                 }
@@ -213,44 +151,46 @@ pipeline {
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
                         echo "COMMIT action selected - updating swagger.json..."
                         
+                        // First, check if we're on a branch or detached HEAD
+                        bat '''
+                            @echo off
+                            echo "Checking git status..."
+                            git checkout main
+                            git pull
+                            git fetch origin
+                            git reset --hard origin/main
+                            git status
+                        '''
+                        
+                        // Update the file
+                        bat '''
+                            @echo off
+                            echo "Updating SwaggerJsonGen\\swagger.json..."
+                            copy generated-swagger.json SwaggerJsonGen\\swagger.json
+                        '''
+                        
+                        // Commit changes
+                        bat '''
+                            @echo off
+                            echo "Committing changes..."
+                            git add SwaggerJsonGen/swagger.json
+                            git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
+                        '''
+                        
+                        // Push changes with credentials
                         withCredentials([usernamePassword(
                             credentialsId: 'github-token',
                             usernameVariable: 'GIT_USER',
                             passwordVariable: 'GIT_TOKEN'
                         )]) {
-                            // First, reset and clean the repository
-                            bat '''
-                                @echo off
-                                echo "Resetting repository..."
-                                git checkout main
-                                git clean -fdx
-                                git reset --hard HEAD
-                                git pull origin main
-                                git status
-                            '''
-                            
-                            // Update the file
-                            bat '''
-                                @echo off
-                                echo "Updating SwaggerJsonGen\\swagger.json..."
-                                copy generated-swagger.json SwaggerJsonGen\\swagger.json /Y
-                            '''
-                            
-                            // Commit changes
                             bat """
                                 @echo off
-                                echo "Committing changes..."
-                                git add SwaggerJsonGen/swagger.json
-                                git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
-                            """
-                            
-                            // Push changes using stored credentials
-                            bat '''
-                                @echo off
                                 echo "Pushing to remote..."
+                                echo "${GIT_USER}:${GIT_TOKEN}"
+                                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
                                 git push origin main
                                 echo "✅ Changes pushed successfully"
-                            '''
+                            """
                         }
                         
                         echo "✅ Changes committed and pushed to repository"
@@ -308,18 +248,6 @@ pipeline {
         }
         failure {
             echo 'Pipeline failed'
-            emailext (
-                subject: "Build Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    <h2>Build Failed</h2>
-                    <p><b>Job:</b> ${env.JOB_NAME}</p>
-                    <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-                    <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
-                """,
-                to: "${env.EMAIL_RECIPIENTS}",
-                mimeType: 'text/html'
-            )
         }
     }
 }
