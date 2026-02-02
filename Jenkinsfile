@@ -222,6 +222,7 @@ pipeline {
                                 echo "Preparing git environment..."
                                 git checkout main
                                 git fetch origin
+                                git reset --mixed origin/main
                                 git status
                             '''
                             
