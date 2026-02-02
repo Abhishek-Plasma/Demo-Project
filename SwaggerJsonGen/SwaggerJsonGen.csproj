@@ -8,7 +8,7 @@
 		<NoWarn>$(NoWarn);1591</NoWarn>
 
 		<!-- Disabled by default so Jenkins is not affected -->
-		<RunApiContractChecks>true</RunApiContractChecks>
+		<RunApiContractChecks>false</RunApiContractChecks>
 	</PropertyGroup>
 
 	<ItemGroup>
