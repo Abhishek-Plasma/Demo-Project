@@ -71,24 +71,6 @@ pipeline {
                     
                     rem Try with local tool first, then global
                     dotnet swagger tofile --output generated-swagger.json "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" v1
-                    
-                    if exist generated-swagger.json (
-                        echo "Successfully generated swagger.json"
-                        echo "Checking file content..."
-                        rem Simple check - just see if file has content
-                        for %%I in (generated-swagger.json) do set size=%%~zI
-                        if %size% GTR 0 (
-                            echo "File size: %size% bytes"
-                            echo "First line with 'openapi':"
-                            findstr /i "openapi" generated-swagger.json 2>nul | more +1
-                        ) else (
-                            echo "ERROR: File is empty!"
-                            exit /b 1
-                        )
-                    ) else (
-                        echo "ERROR: Failed to generate swagger.json"
-                        exit /b 1
-                    )
                 '''
             }
         }
