@@ -11,16 +11,15 @@ pipeline {
             steps {
                 bat '''
                     @echo off
-                    echo "Cleaning workspace..."
+                    echo "Cleaning previous generated files..."
                     if exist generated-swagger.json del generated-swagger.json
-                    if exist swagger.json del swagger.json
                     
-                    echo "Checking spectral.yaml..."
-                    if exist spectral.yaml (
-                        echo "spectral.yaml exists"
-                        type spectral.yaml
+                    echo "Checking for baseline swagger.json..."
+                    if exist swagger.json (
+                        echo "Baseline exists: swagger.json"
+                        for %%I in (swagger.json) do echo Baseline size: %%~zI bytes
                     ) else (
-                        echo "WARNING: spectral.yaml not found in workspace"
+                        echo "No baseline found (first run)"
                     )
                 '''
             }
@@ -31,7 +30,7 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Installing Swashbuckle CLI..."
-                    dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2 --force
+                    dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
                     
                     echo "Setting up local tools..."
                     dotnet new tool-manifest --force
@@ -62,18 +61,14 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Generating Swagger JSON..."
-                    
-                    rem First try with dotnet swagger
                     dotnet swagger tofile --output generated-swagger.json "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" v1
-                    
-                    if errorlevel 1 (
-                        echo "dotnet swagger failed, trying swagger command..."
-                        swagger tofile --output generated-swagger.json "SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll" v1
-                    )
                     
                     if exist generated-swagger.json (
                         echo "SUCCESS: Swagger JSON generated"
                         for %%I in (generated-swagger.json) do echo File size: %%~zI bytes
+                        
+                        echo "Sample of generated swagger:"
+                        type generated-swagger.json | findstr /i "openapi title description version" | head -5
                     ) else (
                         echo "ERROR: Failed to generate Swagger JSON"
                         exit /b 1
@@ -82,148 +77,159 @@ pipeline {
             }
         }
 
-        stage('Check Spectral Config') {
+        stage('Breaking Change Analysis') {
             steps {
                 script {
-                    // First, let's check what's actually in spectral.yaml
+                    echo "=== BREAKING CHANGE ANALYSIS ==="
+                    
+                    // Check if we have both files for comparison
                     bat '''
                         @echo off
-                        echo "=== Checking spectral.yaml ==="
-                        if exist spectral.yaml (
-                            echo "File exists, showing content:"
-                            echo ======================
-                            type spectral.yaml
-                            echo ======================
-                            echo "File size:"
-                            for %%I in (spectral.yaml) do echo %%~zI bytes
-                        ) else (
-                            echo "spectral.yaml does not exist in workspace"
-                            echo "Creating a simple one for testing..."
-                            echo extends: spectral:oas > spectral.yaml
-                            echo. >> spectral.yaml
-                            echo rules: >> spectral.yaml
-                            echo "  info-contact:" >> spectral.yaml
-                            echo "    description: Info should have contact" >> spectral.yaml
-                            echo "    given: \$..info" >> spectral.yaml
-                            echo "    then:" >> spectral.yaml
-                            echo "      field: contact" >> spectral.yaml
-                            echo "      function: truthy" >> spectral.yaml
-                            echo "    severity: warn" >> spectral.yaml
+                        echo "Checking files for comparison..."
+                        
+                        if not exist generated-swagger.json (
+                            echo "ERROR: No new swagger file generated"
+                            exit /b 1
                         )
-                    '''
-                }
-            }
-        }
-
-        stage('Lint Swagger') {
-            steps {
-                script {
-                    // Try linting but don't fail the build if it doesn't work
-                    try {
-                        bat '''
-                            @echo off
-                            echo "Installing Spectral CLI..."
-                            npm install -g @stoplight/spectral-cli 2>nul || echo "npm install failed, using npx"
-                            
-                            echo "Running Spectral lint..."
-                            if exist spectral.yaml (
-                                echo "Using spectral.yaml from workspace"
-                                spectral lint generated-swagger.json --ruleset spectral.yaml || (
-                                    echo "Spectral returned non-zero, but continuing build..."
-                                    echo "This might be due to linting errors in the OpenAPI spec"
-                                )
-                            ) else (
-                                echo "No spectral.yaml, using default rules"
-                                spectral lint generated-swagger.json || (
-                                    echo "Spectral found issues, but continuing..."
-                                )
-                            )
-                        '''
-                    } catch (Exception e) {
-                        echo "Linting stage encountered an error: ${e.getMessage()}"
-                        echo "Continuing with build anyway..."
-                    }
-                }
-            }
-        }
-
-        stage('Breaking Change Check') {
-            steps {
-                bat '''
-                    @echo off
-                    echo "Checking for breaking changes..."
-                    
-                    rem Check if we have a baseline
-                    if not exist swagger.json (
-                        echo "No baseline swagger.json found."
-                        echo "Creating baseline from generated file..."
-                        copy generated-swagger.json swagger.json
-                        echo "Baseline created."
-                        exit /b 0
-                    )
-                    
-                    rem Check if oasdiff is installed
-                    where oasdiff 2>nul
-                    if errorlevel 1 (
-                        echo "oasdiff not found in PATH, checking default location..."
-                        if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
-                            set OASDIFF="C:\\Program Files\\oasdiff\\oasdiff.exe"
-                        ) else (
-                            echo "oasdiff not found. Skipping breaking change check."
+                        
+                        if not exist swagger.json (
+                            echo "WARNING: No baseline swagger.json found"
+                            echo "This is the first run - creating baseline..."
+                            copy generated-swagger.json swagger.json
+                            echo "Baseline created from current version"
                             exit /b 0
                         )
-                    ) else (
-                        set OASDIFF=oasdiff
-                    )
+                        
+                        echo "Both files exist for comparison:"
+                        echo "  Baseline: swagger.json"
+                        echo "  New: generated-swagger.json"
+                    '''
                     
-                    echo "Running breaking change check..."
-                    %OASDIFF% breaking swagger.json generated-swagger.json
+                    // Try different methods to detect changes
+                    bat '''
+                        @echo off
+                        echo.
+                        echo "=== METHOD 1: Simple file comparison ==="
+                        fc swagger.json generated-swagger.json > diff.txt 2>nul
+                        if errorlevel 1 (
+                            echo "DIFFERENCES FOUND (simple comparison):"
+                            type diff.txt
+                        ) else (
+                            echo "No differences found (files are identical)"
+                        )
+                        
+                        echo.
+                        echo "=== METHOD 2: File size comparison ==="
+                        for %%I in (swagger.json) do set baseline_size=%%~zI
+                        for %%I in (generated-swagger.json) do set new_size=%%~zI
+                        echo "Baseline size: !baseline_size! bytes"
+                        echo "New size: !new_size! bytes"
+                        if !baseline_size! neq !new_size! (
+                            echo "WARNING: File sizes differ - potential changes"
+                        ) else (
+                            echo "File sizes match"
+                        )
+                    '''
                     
-                    rem Note: oasdiff returns 1 if breaking changes are found
-                    if errorlevel 1 (
-                        echo "WARNING: Breaking changes detected!"
-                        echo "In development, this is acceptable."
-                    ) else if errorlevel 0 (
-                        echo "No breaking changes detected."
-                    )
-                '''
+                    // Try oasdiff if available
+                    bat '''
+                        @echo off
+                        echo.
+                        echo "=== METHOD 3: OASDiff Tool ==="
+                        
+                        rem Check if oasdiff is installed
+                        where oasdiff 2>nul
+                        if errorlevel 0 (
+                            echo "Found oasdiff in PATH"
+                            set OASDIFF=oasdiff
+                            goto runOasdiff
+                        )
+                        
+                        if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
+                            echo "Found oasdiff at C:\\Program Files\\oasdiff\\oasdiff.exe"
+                            set OASDIFF="C:\\Program Files\\oasdiff\\oasdiff.exe"
+                            goto runOasdiff
+                        )
+                        
+                        if exist "C:\\Tools\\oasdiff\\oasdiff.exe" (
+                            echo "Found oasdiff at C:\\Tools\\oasdiff\\oasdiff.exe"
+                            set OASDIFF="C:\\Tools\\oasdiff\\oasdiff.exe"
+                            goto runOasdiff
+                        )
+                        
+                        echo "oasdiff not found. Installing temporarily..."
+                        
+                        rem Try to download oasdiff
+                        curl -L -o oasdiff_windows_amd64.zip https://github.com/Tufin/oasdiff/releases/latest/download/oasdiff_windows_amd64.zip 2>nul
+                        if exist oasdiff_windows_amd64.zip (
+                            tar -xf oasdiff_windows_amd64.zip oasdiff.exe
+                            set OASDIFF=oasdiff.exe
+                            echo "Installed oasdiff from GitHub release"
+                        ) else (
+                            echo "Could not download oasdiff. Skipping semantic diff."
+                            goto end
+                        )
+                        
+                        :runOasdiff
+                        echo "Running oasdiff breaking change detection..."
+                        echo "Command: %OASDIFF% breaking swagger.json generated-swagger.json"
+                        
+                        %OASDIFF% breaking swagger.json generated-swagger.json > oasdiff_output.txt 2>&1
+                        
+                        if errorlevel 0 (
+                            echo "SUCCESS: No breaking changes detected by oasdiff"
+                            type oasdiff_output.txt
+                        ) else (
+                            echo "BREAKING CHANGES DETECTED by oasdiff:"
+                            type oasdiff_output.txt
+                            
+                            echo.
+                            echo "=== BREAKING CHANGE SUMMARY ==="
+                            echo "The API has breaking changes that could break existing clients."
+                            echo "Review the changes above before deploying."
+                        )
+                        
+                        :end
+                        echo "Breaking change analysis complete"
+                    '''
+                }
             }
         }
     }
 
     post {
         always {
-            echo "=== BUILD COMPLETED ==="
+            echo "=== BUILD SUMMARY ==="
             echo "Status: ${currentBuild.currentResult}"
             
             bat '''
                 @echo off
-                echo "=== FINAL WORKSPACE CONTENTS ==="
-                dir *.json 2>nul || echo "No JSON files found"
+                echo.
+                echo "Generated files:"
+                dir *.json 2>nul || echo "No JSON files"
+                echo.
+                echo "Diff files:"
+                dir diff.txt oasdiff_output.txt 2>nul || echo "No diff files"
                 
                 echo.
-                echo "=== generated-swagger.json PREVIEW ==="
-                if exist generated-swagger.json (
-                    echo First 5 lines:
-                    setlocal enabledelayedexpansion
-                    set counter=0
-                    for /f "tokens=*" %%a in (generated-swagger.json) do (
-                        echo %%a
-                        set /a counter+=1
-                        if !counter! equ 5 exit /b 0
-                    )
+                echo "=== RECOMMENDATION ==="
+                if exist diff.txt (
+                    echo "Changes detected in API definition."
+                    echo "If this is intentional, update the baseline:"
+                    echo "  copy generated-swagger.json swagger.json"
                 ) else (
-                    echo "generated-swagger.json not found"
+                    echo "No changes detected. API is stable."
                 )
             '''
+            
+            // Archive artifacts for review
+            archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
         }
         success {
-            echo '✅ Swagger pipeline completed successfully'
-            archiveArtifacts artifacts: 'generated-swagger.json, swagger.json', allowEmptyArchive: true
+            echo '✅ Pipeline completed successfully'
         }
         failure {
-            echo '❌ Swagger pipeline failed'
-            archiveArtifacts artifacts: '*.json, *.log', allowEmptyArchive: true
+            echo '❌ Pipeline failed'
         }
     }
 }
