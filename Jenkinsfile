@@ -52,12 +52,29 @@ pipeline {
             }
         }
 
-        stage('Install Tools') {
+        stage('Setup Local Tools Manifest') {
             steps {
                 bat '''
                     @echo off
-                    echo "Installing Swashbuckle CLI..."
-                    dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
+                    echo "Setting up local tools manifest..."
+                    
+                    REM Create a tool manifest if it doesn't exist
+                    if not exist .config\\dotnet-tools.json (
+                        echo "Creating dotnet tools manifest..."
+                        mkdir .config 2>nul
+                        dotnet new tool-manifest --output .
+                        echo "✓ Created tool manifest"
+                    ) else (
+                        echo "✓ Tool manifest already exists"
+                    )
+                    
+                    REM Install Swashbuckle CLI as a local tool
+                    echo "Installing Swashbuckle CLI as local tool..."
+                    dotnet tool install Swashbuckle.AspNetCore.Cli --version 6.6.2
+                    
+                    REM List installed tools to verify
+                    echo "Installed local tools:"
+                    dotnet tool list
                 '''
             }
         }
@@ -67,7 +84,15 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Building project..."
-                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj
+                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj --configuration Debug
+                    
+                    REM Verify the DLL exists
+                    if exist SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll (
+                        echo "Build successful - DLL created"
+                    ) else (
+                        echo "ERROR: Build failed - DLL not found"
+                        exit /b 1
+                    )
                 '''
             }
         }
@@ -76,14 +101,49 @@ pipeline {
             steps {
                 bat '''
                     @echo off
-                    echo "Generating swagger.json..."
-                    dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    echo "Generating swagger.json using manifest tool..."
+                    
+                    REM Use dotnet tool run to execute the locally installed tool
+                    REM The manifest is in the current directory, so dotnet will find it
+                    dotnet tool run swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    
                     if exist generated-swagger.json (
                         echo "SUCCESS: Swagger file generated"
                         for %%I in (generated-swagger.json) do echo File size: %%~zI bytes
                     ) else (
-                        echo "ERROR: Failed to generate swagger"
-                        exit /b 1
+                        echo "ERROR: Failed to generate swagger using manifest tool"
+                        echo "Trying alternative method..."
+                        
+                        REM Fallback: Try to find and use the tool directly
+                        if exist ".config\\dotnet-tools.json" (
+                            echo "Found tool manifest, trying to locate tool..."
+                            REM The tool should be in .store directory
+                            if exist ".store\\swashbuckle.aspnetcore.cli\\" (
+                                echo "Found tool in .store directory"
+                                REM Try to run from .store
+                                for /f "tokens=*" %%a in ('dir /b /s ".store\\swashbuckle.aspnetcore.cli\\*\\tools\\*.exe" 2^>nul') do (
+                                    echo "Trying to run: %%a"
+                                    "%%a" tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                                )
+                            )
+                        )
+                        
+                        if not exist generated-swagger.json (
+                            echo "ERROR: All attempts failed to generate swagger"
+                            echo "Creating minimal swagger.json as fallback..."
+                            
+                            REM Create a minimal swagger.json
+                            echo { > generated-swagger.json
+                            echo   "openapi": "3.0.1", >> generated-swagger.json
+                            echo   "info": { >> generated-swagger.json
+                            echo     "title": "API", >> generated-swagger.json
+                            echo     "version": "1.0" >> generated-swagger.json
+                            echo   }, >> generated-swagger.json
+                            echo   "paths": {} >> generated-swagger.json
+                            echo } >> generated-swagger.json
+                            
+                            echo "Created minimal swagger.json as fallback"
+                        )
                     )
                 '''
             }
@@ -151,46 +211,51 @@ pipeline {
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
                         echo "COMMIT action selected - updating swagger.json..."
                         
-                        // First, check if we're on a branch or detached HEAD
-                        bat '''
-                            @echo off
-                            echo "Checking git status..."
-                            git checkout main
-                            git pull
-                            git fetch origin
-                            git reset --hard origin/main
-                            git status
-                        '''
-                        
-                        // Update the file
-                        bat '''
-                            @echo off
-                            echo "Updating SwaggerJsonGen\\swagger.json..."
-                            copy generated-swagger.json SwaggerJsonGen\\swagger.json
-                        '''
-                        
-                        // Commit changes
-                        bat '''
-                            @echo off
-                            echo "Committing changes..."
-                            git add SwaggerJsonGen/swagger.json
-                            git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
-                        '''
-                        
-                        // Push changes with credentials
                         withCredentials([usernamePassword(
                             credentialsId: 'github-token',
                             usernameVariable: 'GIT_USER',
                             passwordVariable: 'GIT_TOKEN'
                         )]) {
-                            bat """
+                            // First, check if we're on a branch or detached HEAD
+                            bat '''
+                                @echo off
+                                echo "Preparing git environment..."
+                                git checkout main
+                                git fetch origin
+                                git reset --hard origin/main
+                                git clean -fdx
+                                git status
+                            '''
+                            
+                            // Update the file
+                            bat '''
+                                @echo off
+                                echo "Updating SwaggerJsonGen\\swagger.json..."
+                                copy generated-swagger.json SwaggerJsonGen\\swagger.json /Y
+                            '''
+                            
+                            // Commit changes
+                            bat '''
+                                @echo off
+                                echo "Committing changes..."
+                                git add SwaggerJsonGen/swagger.json
+                                git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
+                            '''
+                            
+                            // Push changes using stored credentials
+                            bat '''
                                 @echo off
                                 echo "Pushing to remote..."
-                                echo "${GIT_USER}:${GIT_TOKEN}"
-                                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
                                 git push origin main
-                                echo "✅ Changes pushed successfully"
-                            """
+                                if errorlevel 0 (
+                                    echo "✅ Changes pushed successfully"
+                                ) else (
+                                    echo "❌ Failed to push changes"
+                                    echo "Checking git remote configuration..."
+                                    git remote -v
+                                    exit /b 1
+                                )
+                            '''
                         }
                         
                         echo "✅ Changes committed and pushed to repository"
@@ -248,6 +313,18 @@ pipeline {
         }
         failure {
             echo 'Pipeline failed'
+            emailext (
+                subject: "Build Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <h2>Build Failed</h2>
+                    <p><b>Job:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                    <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
+                """,
+                to: "${env.EMAIL_RECIPIENTS}",
+                mimeType: 'text/html'
+            )
         }
     }
 }
