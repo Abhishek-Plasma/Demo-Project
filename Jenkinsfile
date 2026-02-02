@@ -107,13 +107,17 @@ pipeline {
                             echo.
                             echo "BREAKING CHANGE ALERT: API has changed!"
                             echo "Review the differences above."
+                            
+                            rem Failing the build when changes are detected
+                            echo "FAILING THE BUILD - Breaking changes detected!"
+                            exit /b 1
                         ) else (
                             echo "No differences found. API is stable."
                             if exist diff.txt del diff.txt
                         )
                     '''
                     
-                    // Try oasdiff if available
+                    // Try oasdiff if available - this will also fail if breaking changes
                     bat '''
                         @echo off
                         echo.
@@ -122,6 +126,14 @@ pipeline {
                         if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
                             echo "Found oasdiff, running detailed analysis..."
                             "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json
+                            
+                            rem oasdiff returns 0 for no breaking changes, 1 for breaking changes
+                            if errorlevel 1 (
+                                echo "FAILING THE BUILD - Breaking changes detected by oasdiff!"
+                                exit /b 1
+                            ) else (
+                                echo "No breaking changes detected by oasdiff."
+                            )
                         ) else (
                             echo "oasdiff not found. Install it for detailed breaking change analysis."
                             echo "Download from: https://github.com/Tufin/oasdiff"
@@ -153,10 +165,10 @@ pipeline {
             archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
         }
         success {
-            echo '✅ Pipeline completed successfully'
+            echo '✅ Pipeline completed successfully - No breaking changes'
         }
         failure {
-            echo '❌ Pipeline failed'
+            echo '❌ Pipeline failed - Breaking changes detected'
         }
     }
 }
