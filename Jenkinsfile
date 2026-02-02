@@ -26,6 +26,7 @@ pipeline {
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
         GIT_AUTHOR_EMAIL = 'abhishekk@plasmacomp.com'
         GIT_AUTHOR_NAME = 'Abhishek-Plasma'
+        DOTNET_CLI_HOME = 'C:\\ProgramData\\dotnet'  // Explicitly set dotnet home
     }
 
     stages {
@@ -69,7 +70,19 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Installing Swashbuckle CLI..."
-                    dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
+                    
+                    REM Check if dotnet tool is already installed
+                    dotnet tool list --global | findstr swashbuckle
+                    if errorlevel 1 (
+                        echo "Installing Swashbuckle CLI..."
+                        dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
+                    ) else (
+                        echo "Swashbuckle CLI is already installed"
+                    )
+                    
+                    REM Update PATH to include dotnet tools
+                    set PATH=%USERPROFILE%\\.dotnet\\tools;%PATH%
+                    echo "Updated PATH: %PATH%"
                 '''
             }
         }
@@ -79,7 +92,7 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Building project..."
-                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj
+                    dotnet build SwaggerJsonGen\\SwaggerJsonGen.csproj --configuration Debug
                 '''
             }
         }
@@ -89,12 +102,39 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Generating swagger.json..."
+                    
+                    REM Update PATH to ensure dotnet tools are available
+                    set PATH=%USERPROFILE%\\.dotnet\\tools;%PATH%
+                    
+                    REM First, check if the tool is available
+                    where dotnet-swagger
+                    if errorlevel 1 (
+                        echo "ERROR: dotnet-swagger not found in PATH"
+                        echo "Trying alternate method..."
+                    )
+                    
+                    REM Try multiple ways to run swagger generation
+                    echo "Attempt 1: Using dotnet swagger command..."
                     dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    
+                    if not exist generated-swagger.json (
+                        echo "Attempt 2: Using dotnet-swagger directly..."
+                        dotnet-swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    )
+                    
+                    if not exist generated-swagger.json (
+                        echo "Attempt 3: Using full path to dotnet-swagger..."
+                        "%USERPROFILE%\\.dotnet\\tools\\dotnet-swagger.exe" tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
+                    )
+                    
                     if exist generated-swagger.json (
                         echo "SUCCESS: Swagger file generated"
                         for %%I in (generated-swagger.json) do echo File size: %%~zI bytes
                     ) else (
                         echo "ERROR: Failed to generate swagger"
+                        echo "DLL Path: SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll"
+                        echo "Current Directory: %CD%"
+                        echo "PATH: %PATH%"
                         exit /b 1
                     )
                 '''
@@ -135,14 +175,24 @@ pipeline {
                         )
                         
                         echo "Comparing API definitions..."
-                        fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
+                        REM Use a proper diff tool or PowerShell for better comparison
+                        powershell -Command "Compare-Object (Get-Content 'SwaggerJsonGen\\swagger.json') (Get-Content 'generated-swagger.json') | Out-File 'diff.txt' -Encoding ASCII"
                         
-                        if errorlevel 1 (
-                            echo "BREAKING CHANGES DETECTED!"
-                            exit /b 0
+                        if exist diff.txt (
+                            REM Check if diff.txt has content
+                            for /f %%i in ('powershell -Command "(Get-Content 'diff.txt' | Measure-Object -Line).Lines"') do set lineCount=%%i
+                            if !lineCount! GTR 0 (
+                                echo "BREAKING CHANGES DETECTED!"
+                                type diff.txt
+                                exit /b 0
+                            ) else (
+                                echo "No breaking changes detected"
+                                del diff.txt
+                                exit /b 0
+                            )
                         ) else (
                             echo "No breaking changes detected"
-                            if exist diff.txt del diff.txt
+                            exit /b 0
                         )
                     '''
                 }
@@ -168,19 +218,14 @@ pipeline {
                             usernameVariable: 'GIT_USER',
                             passwordVariable: 'GIT_TOKEN'
                         )]) {
-                            // First, check if we're on a branch or detached HEAD
+                            // First, reset and clean the repository
                             bat '''
                                 @echo off
-                                echo "Checking git status..."
+                                echo "Resetting repository..."
                                 git checkout main
-                                
-                                REM Clean up any local changes
                                 git clean -fdx
-                                git reset --hard
-                                
-                                REM Pull latest changes
+                                git reset --hard HEAD
                                 git pull origin main
-                                
                                 git status
                             '''
                             
