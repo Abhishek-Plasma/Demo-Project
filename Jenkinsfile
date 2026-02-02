@@ -5,12 +5,11 @@ pipeline {
         booleanParam(
             name: 'AUTO_COMMIT',
             defaultValue: false,
-            description: 'Check to auto-commit breaking changes. Uncheck to fail pipeline.'
+            description: 'Check to auto-commit breaking changes'
         )
     }
 
     environment {
-        // Email configuration
         EMAIL_RECIPIENTS = 'theak18012002@gmail.com'
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
@@ -18,13 +17,24 @@ pipeline {
     }
 
     stages {
-        stage('Setup Git Configuration') {
+        stage('Setup Git and Authentication') {
             steps {
-                // Configure git user (for commit author info)
-                bat '''
-                    git config --global user.email "abhishekk@plasmacomp.com"
-                    git config --global user.name "Abhishek-Plasma"
-                '''
+                script {
+                    // Configure git user
+                    bat '''
+                        git config --global user.email "abhishekk@plasmacomp.com"
+                        git config --global user.name "Abhishek-Plasma"
+                    '''
+                    
+                    // Setup authentication - replace with your actual GitHub token
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        bat '''
+                            @echo off
+                            echo "Setting up GitHub authentication..."
+                            git remote set-url origin https://%GITHUB_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git
+                        '''
+                    }
+                }
             }
         }
 
@@ -76,9 +86,11 @@ pipeline {
             }
         }
 
-        stage('Check and Handle Breaking Changes') {
+        stage('Check Breaking Changes') {
             steps {
                 script {
+                    echo "=== CHECKING BREAKING CHANGES ==="
+                    
                     // Check if baseline exists
                     bat '''
                         @echo off
@@ -103,6 +115,13 @@ pipeline {
                         if (params.AUTO_COMMIT) {
                             echo "Auto-commit enabled - updating swagger.json..."
                             
+                            // First, ensure we're on main branch (not detached HEAD)
+                            bat '''
+                                @echo off
+                                echo "Checking current branch..."
+                                git checkout main 2>nul || git checkout -b main
+                            '''
+                            
                             // Update the file
                             bat '''
                                 @echo off
@@ -118,13 +137,17 @@ pipeline {
                                 git commit -m "Update API contract - Build #%BUILD_NUMBER%"
                             '''
                             
-                            // Now push with authentication using Jenkins credentials
-                            echo "Pushing to GitHub..."
-                            bat '''
-                                @echo off
-                                echo "Pushing changes to GitHub..."
-                                git push origin HEAD
-                            '''
+                            // Push with explicit authentication
+                            script {
+                                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                                    bat '''
+                                        @echo off
+                                        echo "Pushing to GitHub..."
+                                        git push https://%GITHUB_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git HEAD:main
+                                        echo "✅ Changes pushed successfully"
+                                    '''
+                                }
+                            }
                             
                             echo "✅ Changes committed and pushed to repository"
                         } else {
