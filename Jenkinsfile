@@ -20,11 +20,10 @@ pipeline {
     }
 
     environment {
-        EMAIL_RECIPIENTS = 'theak18012002@gmail.com'  // Update with your email
+        EMAIL_RECIPIENTS = 'theak18012002@gmail.com'
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
-        BRANCH_NAME = "${env.BRANCH_NAME ?: 'main'}"
     }
 
     stages {
@@ -84,30 +83,50 @@ pipeline {
                     echo "=== DETECTING BREAKING CHANGES ==="
                     echo "Action selected: ${params.BREAKING_CHANGE_ACTION}"
                     
+                    // Create a breaking changes report file
+                    bat '''
+                        @echo off
+                        echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
+                        echo "Build: %JOB_NAME% #%BUILD_NUMBER%" >> breaking_changes_report.txt
+                        echo "Build URL: %BUILD_URL%" >> breaking_changes_report.txt
+                        echo "Date: %DATE% %TIME%" >> breaking_changes_report.txt
+                        echo. >> breaking_changes_report.txt
+                    '''
+                    
                     // Check if baseline exists
                     bat '''
                         @echo off
                         echo "Checking for baseline swagger.json..."
                         if not exist swagger.json (
+                            echo "No baseline found. Creating baseline..." >> breaking_changes_report.txt
                             echo "No baseline found. Creating baseline..."
                             copy generated-swagger.json swagger.json
+                            echo "Baseline created from current API." >> breaking_changes_report.txt
                             echo "Baseline created."
                             exit /b 0
                         )
                     '''
                     
-                    // Compare files and save diff
+                    // Compare files - don't fail if differences found
                     bat '''
                         @echo off
+                        echo "Comparing with baseline..." >> breaking_changes_report.txt
                         echo "Comparing with baseline..."
+                        
+                        rem Always exit with 0, we'll check file existence later
                         fc swagger.json generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
+                            echo "BREAKING CHANGES DETECTED" >> breaking_changes_report.txt
+                            echo "Differences:" >> breaking_changes_report.txt
+                            echo "=============" >> breaking_changes_report.txt
+                            type diff.txt >> breaking_changes_report.txt
+                            echo "=============" >> breaking_changes_report.txt
                             echo "BREAKING CHANGES DETECTED"
-                            exit /b 1
                         ) else (
+                            echo "No breaking changes detected" >> breaking_changes_report.txt
                             echo "No breaking changes detected"
-                            exit /b 0
+                            if exist diff.txt del diff.txt
                         )
                     '''
                 }
@@ -117,20 +136,19 @@ pipeline {
         stage('Handle Breaking Changes') {
             when {
                 expression { 
-                    // Only run this stage if breaking changes were detected
-                    // We'll check if diff.txt exists (created in previous stage)
+                    // Run this stage if diff.txt exists (breaking changes detected)
                     fileExists('diff.txt')
                 }
             }
             steps {
                 script {
                     echo "=== HANDLING BREAKING CHANGES ==="
+                    echo "Breaking changes detected. Action: ${params.BREAKING_CHANGE_ACTION}"
                     
-                    // Read the diff for reporting
-                    def diffContent = readFile('diff.txt')
+                    def diffContent = readFile('diff.txt').trim()
                     
                     if (params.BREAKING_CHANGE_ACTION == 'COMMIT') {
-                        echo "Action: COMMIT - Will update swagger.json and commit to git"
+                        echo "COMMIT action selected - updating swagger.json and committing to git..."
                         
                         // Update swagger.json with new version
                         bat '''
@@ -147,7 +165,7 @@ pipeline {
                             git commit -m "${params.COMMIT_MESSAGE} - Build #${env.BUILD_NUMBER}"
                             
                             echo "Pushing to repository..."
-                            git push origin ${env.BRANCH_NAME}
+                            git push origin HEAD
                             
                             echo "✅ API contract updated and committed"
                         '''
@@ -163,7 +181,6 @@ pipeline {
                                 <p><b>Job:</b> ${env.JOB_NAME}</p>
                                 <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                                 <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                                <p><b>Branch:</b> ${env.BRANCH_NAME}</p>
                                 <p><b>Commit Message:</b> ${params.COMMIT_MESSAGE}</p>
                                 
                                 <h3>Changes Detected:</h3>
@@ -176,10 +193,10 @@ pipeline {
                         )
                         
                     } else if (params.BREAKING_CHANGE_ACTION == 'FAIL') {
-                        echo "Action: FAIL - Failing pipeline due to breaking changes"
+                        echo "FAIL action selected - failing pipeline..."
                         
                         // Fail the build
-                        error("❌ Breaking changes detected. Pipeline failed as per BREAKING_CHANGE_ACTION=FAIL")
+                        error("❌ Breaking changes detected. Pipeline failed as per BREAKING_CHANGE_ACTION=FAIL\n\nChanges:\n${diffContent}")
                     }
                 }
             }
@@ -204,7 +221,6 @@ pipeline {
             // This runs when build succeeds (no breaking changes or they were committed)
             echo '✅ Pipeline completed successfully'
             
-            // Only send success email if no breaking changes were handled
             script {
                 if (!fileExists('diff.txt')) {
                     emailext (
@@ -216,7 +232,6 @@ pipeline {
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                            <p><b>Branch:</b> ${env.BRANCH_NAME}</p>
                         """,
                         to: "${env.EMAIL_RECIPIENTS}",
                         mimeType: 'text/html'
@@ -226,12 +241,12 @@ pipeline {
         }
         
         failure {
-            // This runs when build fails (breaking changes with FAIL action)
+            // This runs when build fails (breaking changes with FAIL action or other errors)
             echo '❌ Pipeline failed'
             
             script {
-                if (fileExists('diff.txt')) {
-                    def diffContent = readFile('diff.txt')
+                if (fileExists('diff.txt') && params.BREAKING_CHANGE_ACTION == 'FAIL') {
+                    def diffContent = readFile('diff.txt').trim()
                     
                     emailext (
                         subject: "❌ API Breaking Changes - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -243,7 +258,6 @@ pipeline {
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                            <p><b>Branch:</b> ${env.BRANCH_NAME}</p>
                             
                             <h3>Breaking Changes:</h3>
                             <pre>${diffContent}</pre>
@@ -264,6 +278,9 @@ pipeline {
                         to: "${env.EMAIL_RECIPIENTS}",
                         mimeType: 'text/html'
                     )
+                } else if (fileExists('diff.txt') && params.BREAKING_CHANGE_ACTION == 'COMMIT') {
+                    // This should not happen - if COMMIT action, build should succeed
+                    echo "ERROR: Build failed with COMMIT action - git operations might have failed"
                 } else {
                     // Generic failure email for other errors
                     emailext (
@@ -275,7 +292,6 @@ pipeline {
                             <p><b>Job:</b> ${env.JOB_NAME}</p>
                             <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                            <p><b>Branch:</b> ${env.BRANCH_NAME}</p>
                             
                             <p>Check the build logs for details.</p>
                         """,
