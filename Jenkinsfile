@@ -48,6 +48,7 @@ pipeline {
                     echo "Cleaning workspace..."
                     if exist generated-swagger.json del generated-swagger.json
                     if exist diff.txt del diff.txt
+                    if exist spectral-report.json del spectral-report.json
                 '''
             }
         }
@@ -75,6 +76,36 @@ pipeline {
                     REM List installed tools to verify
                     echo "Installed local tools:"
                     dotnet tool list
+                '''
+            }
+        }
+
+        stage('Install Spectral') {
+            steps {
+                bat '''
+                    @echo off
+                    echo "Installing Spectral CLI..."
+                    
+                    REM Check if npm is available
+                    where npm >nul 2>nul
+                    if errorlevel 1 (
+                        echo "ERROR: npm not found in PATH"
+                        echo "Please ensure Node.js is installed on the Jenkins agent"
+                        exit /b 1
+                    )
+                    
+                    REM Check if Spectral is already installed
+                    spectral --version >nul 2>nul
+                    if errorlevel 1 (
+                        echo "Spectral not found. Installing globally..."
+                        npm install -g @stoplight/spectral-cli
+                    ) else (
+                        echo "Spectral is already installed"
+                    )
+                    
+                    REM Verify installation
+                    spectral --version
+                    echo "✓ Spectral installation completed"
                 '''
             }
         }
@@ -161,6 +192,74 @@ pipeline {
                             echo "Found baseline at: SwaggerJsonGen\\swagger.json"
                         ) else (
                             echo "Baseline NOT found at: SwaggerJsonGen\\swagger.json"
+                        )
+                    '''
+                }
+            }
+        }
+
+        stage('Lint Swagger with Spectral') {
+            steps {
+                script {
+                    echo "=== LINTING SWAGGER WITH SPECTRAL ==="
+                    
+                    bat '''
+                        @echo off
+                        echo "Checking for generated swagger.json..."
+                        if not exist generated-swagger.json (
+                            echo "ERROR: generated-swagger.json not found!"
+                            exit /b 1
+                        )
+                        
+                        echo "Linting swagger.json with Spectral..."
+                        
+                        REM Check if spectral.yaml exists, if not create a default one
+                        if not exist spectral.yaml (
+                            echo "spectral.yaml not found. Creating default Spectral ruleset..."
+                            
+                            REM Create a default Spectral ruleset
+                            echo extends: spectral:oas > spectral.yaml
+                            echo rules: >> spectral.yaml
+                            echo   info-contact: >> spectral.yaml
+                            echo     description: Info object must have contact information >> spectral.yaml
+                            echo     message: The info object should contain a contact object with name, email, or URL. >> spectral.yaml
+                            echo     severity: warn >> spectral.yaml
+                            echo   operation-tags: >> spectral.yaml
+                            echo     description: Operations must have at least one tag. >> spectral.yaml
+                            echo     message: Operation must have non-empty tags array. >> spectral.yaml
+                            echo     severity: warn >> spectral.yaml
+                            echo   no-eval-in-descriptions: >> spectral.yaml
+                            echo     description: Descriptions must not contain eval() >> spectral.yaml
+                            echo     message: Description contains eval() which is a security risk. >> spectral.yaml
+                            echo     severity: error >> spectral.yaml
+                            
+                            echo "Created default spectral.yaml"
+                        )
+                        
+                        REM Run Spectral lint with JSON output for better parsing
+                        echo "Running Spectral lint..."
+                        spectral lint generated-swagger.json --ruleset spectral.yaml --format json > spectral-report.json 2>&1
+                        
+                        REM Check if Spectral ran successfully
+                        if errorlevel 1 (
+                            echo "SPECTRAL LINTING FAILED!"
+                            echo "Spectral found issues in the API definition."
+                            echo "Checking if report was generated..."
+                            
+                            REM Try to read and display the report
+                            if exist spectral-report.json (
+                                echo "Spectral Report:"
+                                type spectral-report.json
+                                
+                                REM You could parse the JSON and fail based on error severity
+                                REM For now, we'll just warn but continue
+                                echo "Continuing with pipeline despite Spectral warnings..."
+                            ) else (
+                                echo "No Spectral report generated"
+                            )
+                        ) else (
+                            echo "✓ Spectral linting passed - no issues found"
+                            if exist spectral-report.json del spectral-report.json
                         )
                     '''
                 }
@@ -289,7 +388,7 @@ pipeline {
         always {
             echo "=== BUILD COMPLETED ==="
             echo "Status: ${currentBuild.currentResult}"
-            archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.json, *.txt, *.yaml', allowEmptyArchive: true
         }
         success {
             echo 'Pipeline completed successfully'
@@ -321,7 +420,7 @@ pipeline {
                     <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                     <p><b>Status:</b> ${currentBuild.currentResult}</p>
                 """,
-                to: "${env.EMAIL_RECIPIENTS}",
+                to: "${env.EMAIL_RECipIENTS}",
                 mimeType: 'text/html'
             )
         }
