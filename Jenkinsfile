@@ -24,8 +24,8 @@ pipeline {
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
-        GIT_AUTHOR_EMAIL = 'jenkins@example.com'
-        GIT_AUTHOR_NAME = 'Jenkins CI'
+        GIT_AUTHOR_EMAIL = 'abhishekk@plasmacomp.com'
+        GIT_AUTHOR_NAME = 'Abhishek-Plasma'
     }
 
     stages {
@@ -34,8 +34,8 @@ pipeline {
                 bat '''
                     @echo off
                     echo "Configuring git user..."
-                    git config --global user.email "jenkins@example.com"
-                    git config --global user.name "Jenkins CI"
+                    git config --global user.email "abhishekk@plasmacomp.com"
+                    git config --global user.name "Abhishek-Plasma"
                     git config --global push.default simple
                 '''
             }
