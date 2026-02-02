@@ -178,20 +178,23 @@ pipeline {
                         '''
                         
                         // Push changes with credentials
-                        withCredentials([usernamePassword(
-                            credentialsId: 'github-token',
-                            usernameVariable: 'GIT_USER',
-                            passwordVariable: 'GIT_TOKEN'
-                        )]) {
-                            bat """
-                                @echo off
-                                echo "Pushing to remote..."
-                                echo "${GIT_USER}:${GIT_TOKEN}"
-                                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
-                                git push origin main
-                                echo "✅ Changes pushed successfully"
-                            """
-                        }
+                        // withCredentials([usernamePassword(
+                        //     credentialsId: 'github-token',
+                        //     usernameVariable: 'GIT_USER',
+                        //     passwordVariable: 'GIT_TOKEN'
+                        // )]) {
+                        //     bat """
+                        //         @echo off
+                        //         echo "Pushing to remote..."
+                        //         echo "${GIT_USER}:${GIT_TOKEN}"
+                        //         git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Abhishek-Plasma/Demo-Project.git
+                        //         git push origin main
+                        //         echo "✅ Changes pushed successfully"
+                        //     """
+                        // }
+
+                        git push origin main
+                        echo "✅ Changes pushed successfully"
                         
                         echo "✅ Changes committed and pushed to repository"
                         
