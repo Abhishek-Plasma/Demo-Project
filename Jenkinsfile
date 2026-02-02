@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         // Email configuration
-        EMAIL_RECIPIENTS = 'abhishek@example.com'  // Change this to your email
+        EMAIL_RECIPIENTS = 'tatsat@plasmacomp.com'  // Change this to your email
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
