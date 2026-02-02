@@ -7,6 +7,11 @@ pipeline {
             defaultValue: false,
             description: 'Check to auto-commit breaking changes'
         )
+        choice(
+            name: 'ON_BREAKING_CHANGE',
+            choices: ['FAIL', 'WARN', 'UNSTABLE'],
+            description: 'What to do when breaking changes are detected'
+        )
     }
 
     environment {
@@ -14,7 +19,6 @@ pipeline {
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
-        REPO_URL = 'https://github.com/Abhishek-Plasma/Demo-Project.git'
     }
 
     stages {
@@ -83,101 +87,119 @@ pipeline {
             steps {
                 script {
                     // Check if baseline exists
-                    bat '''
-                        @echo off
-                        if not exist "SwaggerJsonGen\\swagger.json" (
-                            echo "No baseline found. Creating initial baseline..."
-                            copy generated-swagger.json SwaggerJsonGen\\swagger.json
-                        )
-                    '''
+                    def baselineExists = fileExists('SwaggerJsonGen/swagger.json')
                     
-                    // Check if baseline was created in this run
-                    def baselineExists = bat(
-                        script: '@echo off && if exist "SwaggerJsonGen\\swagger.json" (echo exists) else (echo not_exists)',
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (baselineExists == "not_exists") {
-                        // Initial baseline created, we can stop here or commit
-                        echo "Initial baseline created. Manual push required."
-                        currentBuild.result = 'UNSTABLE'
+                    if (!baselineExists) {
+                        echo "No baseline found. Creating initial baseline..."
+                        bat 'copy generated-swagger.json SwaggerJsonGen\\swagger.json'
+                        echo "✅ Initial baseline created"
+                        currentBuild.result = 'SUCCESS'
                         return
                     }
                     
-                    // Compare files - using PowerShell for better comparison
+                    // Compare files using file comparison
                     def compareResult = bat(
                         script: '''
                             @echo off
-                            powershell -Command "if ((Get-Content 'SwaggerJsonGen\\swagger.json' -Raw) -eq (Get-Content 'generated-swagger.json' -Raw)) { exit 0 } else { exit 1 }"
+                            fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
+                            echo %errorlevel%
                         ''',
-                        returnStatus: true
-                    )
+                        returnStdout: true
+                    ).trim()
                     
-                    if (compareResult == 1) {
-                        echo "Breaking changes detected!"
+                    if (compareResult == "0") {
+                        echo "✅ No breaking changes detected"
+                        bat 'if exist diff.txt del diff.txt'
+                    } else {
+                        echo "⚠️ Breaking changes detected!"
                         
-                        // Create a diff report
+                        // Create a detailed report
                         bat '''
                             @echo off
-                            echo "=== BREAKING CHANGES DETECTED ===" > breaking_changes_report.txt
-                            echo "Build: %BUILD_NUMBER%" >> breaking_changes_report.txt
+                            echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
+                            echo "Build Number: %BUILD_NUMBER%" >> breaking_changes_report.txt
+                            echo "Job: %JOB_NAME%" >> breaking_changes_report.txt
                             echo "Date: %DATE% %TIME%" >> breaking_changes_report.txt
+                            echo "=====================================" >> breaking_changes_report.txt
                             echo. >> breaking_changes_report.txt
-                            echo "Differences between baseline and generated swagger:" >> breaking_changes_report.txt
-                            echo "==================================================" >> breaking_changes_report.txt
-                            fc "SwaggerJsonGen\\swagger.json" "generated-swagger.json" >> breaking_changes_report.txt 2>&1
+                            echo "DIFFERENCES FOUND:" >> breaking_changes_report.txt
+                            echo "==================" >> breaking_changes_report.txt
+                            type diff.txt >> breaking_changes_report.txt
+                            echo. >> breaking_changes_report.txt
+                            echo "SUMMARY:" >> breaking_changes_report.txt
+                            echo "=========" >> breaking_changes_report.txt
+                            echo "- Old file: SwaggerJsonGen\\swagger.json" >> breaking_changes_report.txt
+                            echo "- New file: generated-swagger.json" >> breaking_changes_report.txt
+                            echo "- Auto-commit enabled: ''' + params.AUTO_COMMIT + '''" >> breaking_changes_report.txt
                         '''
                         
+                        // Display diff in console
+                        def diffContent = bat(
+                            script: '@echo off && type diff.txt',
+                            returnStdout: true
+                        )
+                        echo "Diff output:\n${diffContent}"
+                        
+                        // Handle based on parameter choice
                         if (params.AUTO_COMMIT) {
-                            echo "Auto-commit enabled - updating swagger.json..."
+                            echo "Auto-commit enabled - attempting to update..."
                             
-                            withCredentials([usernamePassword(
-                                credentialsId: 'github-token',
-                                usernameVariable: 'GIT_USERNAME',
-                                passwordVariable: 'GIT_TOKEN'
-                            )]) {
-                                // Clone repository fresh to avoid detached HEAD issues
+                            try {
+                                // Ensure we're on main branch
                                 bat '''
                                     @echo off
-                                    echo "Setting up fresh repository clone..."
-                                    
-                                    REM Create a clean directory for git operations
-                                    if exist "temp_repo" rd /s /q "temp_repo"
-                                    mkdir temp_repo
-                                    cd temp_repo
-                                    
-                                    REM Clone with token authentication
-                                    git clone https://%GIT_USERNAME%:%GIT_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git .
-                                    
-                                    REM Copy the new swagger file
-                                    copy "..\\generated-swagger.json" "SwaggerJsonGen\\swagger.json"
-                                    
-                                    REM Configure git
-                                    git config user.email "abhishekk@plasmacomp.com"
-                                    git config user.name "Abhishek-Plasma"
-                                    
-                                    REM Check if there are changes
-                                    git status
-                                    git diff --quiet SwaggerJsonGen\\swagger.json
-                                    if errorlevel 1 (
-                                        echo "Changes detected, committing..."
+                                    echo "Checking git status..."
+                                    git checkout main 2>nul || echo "Already on main or cannot checkout"
+                                    git pull origin main
+                                '''
+                                
+                                // Update the swagger file
+                                bat 'copy generated-swagger.json SwaggerJsonGen\\swagger.json /Y'
+                                
+                                // Commit changes
+                                withCredentials([usernamePassword(
+                                    credentialsId: 'github-token',
+                                    usernameVariable: 'GIT_USERNAME',
+                                    passwordVariable: 'GIT_TOKEN'
+                                )]) {
+                                    bat '''
+                                        @echo off
                                         git add SwaggerJsonGen\\swagger.json
                                         git commit -m "Update API contract - Build #%BUILD_NUMBER%"
+                                        
+                                        REM Configure remote with token
+                                        git remote set-url origin https://%GIT_USERNAME%:%GIT_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git
                                         git push origin main
+                                        
                                         echo "✅ Changes committed and pushed successfully"
-                                    ) else (
-                                        echo "No changes to commit"
-                                    )
-                                    
-                                    cd ..
-                                '''
+                                    '''
+                                }
+                                
+                                echo "✅ API contract updated and committed"
+                            } catch (Exception e) {
+                                echo "❌ Failed to auto-commit: ${e.message}"
+                                currentBuild.result = 'FAILURE'
+                                error("Auto-commit failed")
                             }
                         } else {
-                            echo "Auto-commit disabled - breaking changes detected"
-                            error("Breaking changes detected. Enable AUTO_COMMIT parameter to auto-update.")
+                            // Handle based on user choice
+                            switch(params.ON_BREAKING_CHANGE) {
+                                case 'FAIL':
+                                    echo "❌ Failing build due to breaking changes"
+                                    currentBuild.result = 'FAILURE'
+                                    error("Breaking changes detected. Set AUTO_COMMIT=true to auto-update or set ON_BREAKING_CHANGE to 'WARN'.")
+                                    break
+                                case 'WARN':
+                                    echo "⚠️ Breaking changes detected but continuing build"
+                                    echo "You can view the differences in breaking_changes_report.txt"
+                                    currentBuild.result = 'SUCCESS'
+                                    break
+                                case 'UNSTABLE':
+                                    echo "⚠️ Marking build as unstable due to breaking changes"
+                                    currentBuild.result = 'UNSTABLE'
+                                    break
+                            }
                         }
-                    } else {
-                        echo "✅ No breaking changes detected"
                     }
                 }
             }
@@ -189,26 +211,30 @@ pipeline {
             echo "=== BUILD COMPLETED ==="
             echo "Status: ${currentBuild.currentResult}"
             
-            bat '''
-                @echo off
-                echo "Files in workspace:"
-                dir /b *.json *.txt 2>nul || echo "No files found"
-            '''
-            
+            // Archive artifacts
             archiveArtifacts artifacts: '*.json, *.txt', allowEmptyArchive: true
             
-            // Clean up temp directory
-            bat 'if exist temp_repo rd /s /q temp_repo'
+            // Cleanup
+            bat '''
+                @echo off
+                echo "Final files in workspace:"
+                dir /b *.json *.txt 2>nul || echo "No files found"
+            '''
         }
+        
         success {
             echo '✅ Build succeeded'
+            // Optional: Send success email
         }
+        
         failure {
             echo '❌ Build failed'
-            // Optionally send email notification
+            // Optional: Send failure email with report
         }
+        
         unstable {
-            echo '⚠️ Build unstable - initial baseline created'
+            echo '⚠️ Build unstable - breaking changes detected'
+            // Optional: Send unstable notification
         }
     }
 }
