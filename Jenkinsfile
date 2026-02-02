@@ -17,23 +17,15 @@ pipeline {
     }
 
     stages {
-        stage('Setup Git and Authentication') {
+        stage('Setup Git Configuration') {
             steps {
                 script {
                     // Configure git user
                     bat '''
                         git config --global user.email "abhishekk@plasmacomp.com"
                         git config --global user.name "Abhishek-Plasma"
+                        git config --global core.autocrlf false
                     '''
-                    
-                    // Setup authentication - replace with your actual GitHub token
-                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        bat '''
-                            @echo off
-                            echo "Setting up GitHub authentication..."
-                            git remote set-url origin https://%GITHUB_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git
-                        '''
-                    }
                 }
             }
         }
@@ -86,11 +78,9 @@ pipeline {
             }
         }
 
-        stage('Check Breaking Changes') {
+        stage('Check and Handle Breaking Changes') {
             steps {
                 script {
-                    echo "=== CHECKING BREAKING CHANGES ==="
-                    
                     // Check if baseline exists
                     bat '''
                         @echo off
@@ -100,6 +90,7 @@ pipeline {
                             git add SwaggerJsonGen\\swagger.json
                             git commit -m "Initial API contract"
                             echo "Initial baseline created (locally)"
+                            echo "Note: You need to push manually or run with AUTO_COMMIT=true"
                         )
                     '''
                     
@@ -115,11 +106,11 @@ pipeline {
                         if (params.AUTO_COMMIT) {
                             echo "Auto-commit enabled - updating swagger.json..."
                             
-                            // First, ensure we're on main branch (not detached HEAD)
+                            // First, fix detached HEAD issue
                             bat '''
                                 @echo off
-                                echo "Checking current branch..."
-                                git checkout main 2>nul || git checkout -b main
+                                echo "Checking git status..."
+                                git checkout main 2>nul || echo "Already on main or cannot checkout"
                             '''
                             
                             // Update the file
@@ -137,16 +128,26 @@ pipeline {
                                 git commit -m "Update API contract - Build #%BUILD_NUMBER%"
                             '''
                             
-                            // Push with explicit authentication
-                            script {
-                                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                                    bat '''
-                                        @echo off
-                                        echo "Pushing to GitHub..."
-                                        git push https://%GITHUB_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git HEAD:main
-                                        echo "✅ Changes pushed successfully"
-                                    '''
-                                }
+                            // Use withCredentials with usernamePassword (not string)
+                            withCredentials([usernamePassword(
+                                credentialsId: 'github-token',
+                                usernameVariable: 'GIT_USERNAME',
+                                passwordVariable: 'GIT_PASSWORD'
+                            )]) {
+                                // Set remote URL with credentials
+                                bat '''
+                                    @echo off
+                                    echo "Setting up authentication..."
+                                    git remote set-url origin https://%GIT_USERNAME%:%GIT_PASSWORD%@github.com/Abhishek-Plasma/Demo-Project.git
+                                '''
+                                
+                                // Push to GitHub
+                                bat '''
+                                    @echo off
+                                    echo "Pushing to GitHub..."
+                                    git push origin HEAD:main
+                                    echo "✅ Changes pushed successfully"
+                                '''
                             }
                             
                             echo "✅ Changes committed and pushed to repository"
