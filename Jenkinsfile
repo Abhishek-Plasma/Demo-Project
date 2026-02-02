@@ -155,10 +155,10 @@ pipeline {
                         bat '''
                             @echo off
                             echo "Checking git status..."
-                            git status
                             git checkout main
                             git pull origin main
                             git reset --soft origin/main
+                            git status
                         '''
                         
                         // Update the file
