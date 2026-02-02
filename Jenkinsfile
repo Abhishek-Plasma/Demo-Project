@@ -167,13 +167,6 @@ pipeline {
                             copy generated-swagger.json SwaggerJsonGen\\swagger.json
                         '''
                         
-                        // Checkout main branch first (we might be in detached HEAD)
-                        bat '''
-                            @echo off
-                            echo "Ensuring we're on main branch..."
-                            git checkout main 2>nul || git checkout -b main
-                        '''
-                        
                         // Pull latest changes to avoid conflicts
                         bat '''
                             @echo off
