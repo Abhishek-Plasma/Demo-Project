@@ -6,6 +6,14 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    environment {
+        // Email configuration
+        EMAIL_RECIPIENTS = 'abhishek@example.com'  // Change this to your email
+        BUILD_URL = "${env.BUILD_URL}"
+        JOB_NAME = "${env.JOB_NAME}"
+        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+    }
+
     stages {
         stage('Clean Workspace') {
             steps {
@@ -14,6 +22,7 @@ pipeline {
                     echo "Cleaning up..."
                     if exist generated-swagger.json del generated-swagger.json
                     if exist diff.txt del diff.txt
+                    if exist breaking_changes_report.txt del breaking_changes_report.txt
                 '''
             }
         }
@@ -44,13 +53,7 @@ pipeline {
                     @echo off
                     echo "Generating swagger.json..."
                     
-                    rem Try dotnet swagger first, then regular swagger
                     dotnet swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    
-                    if errorlevel 1 (
-                        echo "dotnet swagger failed, trying swagger command..."
-                        swagger tofile --output generated-swagger.json SwaggerJsonGen\\bin\\Debug\\net8.0\\SwaggerJsonGen.dll v1
-                    )
                     
                     if exist generated-swagger.json (
                         echo "SUCCESS: Swagger file generated"
@@ -83,60 +86,68 @@ pipeline {
                             exit /b 0
                         )
                         
-                        echo "Step 2: Compare file sizes..."
+                        echo "Step 2: Create breaking changes report..."
+                        echo "=== API BREAKING CHANGES REPORT ===" > breaking_changes_report.txt
+                        echo "Build: %JOB_NAME% #%BUILD_NUMBER%" >> breaking_changes_report.txt
+                        echo "Build URL: %BUILD_URL%" >> breaking_changes_report.txt
+                        echo "Generated at: %DATE% %TIME%" >> breaking_changes_report.txt
+                        echo. >> breaking_changes_report.txt
+                        
+                        echo "Step 3: Compare file sizes..."
                         for %%I in (swagger.json) do set baseline=%%~zI
                         for %%I in (generated-swagger.json) do set current=%%~zI
-                        echo Baseline: !baseline! bytes
-                        echo Current:  !current! bytes
+                        echo Baseline: !baseline! bytes >> breaking_changes_report.txt
+                        echo Current:  !current! bytes >> breaking_changes_report.txt
+                        echo. >> breaking_changes_report.txt
                         
                         if !baseline! == !current! (
-                            echo "File sizes match."
+                            echo "File sizes match." >> breaking_changes_report.txt
                         ) else (
-                            echo "WARNING: File sizes differ!"
+                            echo "WARNING: File sizes differ!" >> breaking_changes_report.txt
                         )
                         
-                        echo.
-                        echo "Step 3: Simple text comparison..."
+                        echo. >> breaking_changes_report.txt
+                        echo "Step 4: Simple text comparison..." >> breaking_changes_report.txt
                         fc swagger.json generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
-                            echo "DIFFERENCES FOUND:"
-                            echo "=================="
-                            type diff.txt
-                            echo "=================="
-                            echo.
-                            echo "BREAKING CHANGE ALERT: API has changed!"
-                            echo "Review the differences above."
+                            echo "DIFFERENCES FOUND:" >> breaking_changes_report.txt
+                            echo "==================" >> breaking_changes_report.txt
+                            type diff.txt >> breaking_changes_report.txt
+                            echo "==================" >> breaking_changes_report.txt
+                            echo. >> breaking_changes_report.txt
+                            echo "BREAKING CHANGE ALERT: API has changed!" >> breaking_changes_report.txt
                             
-                            rem Failing the build when changes are detected
+                            rem Also display on console
+                            type breaking_changes_report.txt
+                            
                             echo "FAILING THE BUILD - Breaking changes detected!"
                             exit /b 1
                         ) else (
-                            echo "No differences found. API is stable."
+                            echo "No differences found. API is stable." >> breaking_changes_report.txt
                             if exist diff.txt del diff.txt
                         )
                     '''
                     
-                    // Try oasdiff if available - this will also fail if breaking changes
+                    // Try oasdiff if available
                     bat '''
                         @echo off
                         echo.
-                        echo "Step 4: Checking for oasdiff tool..."
+                        echo "Step 5: Checking for oasdiff tool..." >> breaking_changes_report.txt
                         
                         if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
-                            echo "Found oasdiff, running detailed analysis..."
-                            "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json
+                            echo "Found oasdiff, running detailed analysis..." >> breaking_changes_report.txt
+                            "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json >> breaking_changes_report.txt 2>&1
                             
-                            rem oasdiff returns 0 for no breaking changes, 1 for breaking changes
                             if errorlevel 1 (
-                                echo "FAILING THE BUILD - Breaking changes detected by oasdiff!"
+                                echo "FAILING THE BUILD - Breaking changes detected by oasdiff!" >> breaking_changes_report.txt
                                 exit /b 1
                             ) else (
-                                echo "No breaking changes detected by oasdiff."
+                                echo "No breaking changes detected by oasdiff." >> breaking_changes_report.txt
                             )
                         ) else (
-                            echo "oasdiff not found. Install it for detailed breaking change analysis."
-                            echo "Download from: https://github.com/Tufin/oasdiff"
+                            echo "oasdiff not found. Install it for detailed breaking change analysis." >> breaking_changes_report.txt
+                            echo "Download from: https://github.com/Tufin/oasdiff" >> breaking_changes_report.txt
                         )
                     '''
                 }
@@ -153,12 +164,7 @@ pipeline {
                 @echo off
                 echo.
                 echo "Files in workspace:"
-                dir /b *.json 2>nul || echo "No JSON files"
-                
-                if exist diff.txt (
-                    echo.
-                    echo "Diff file exists. Review it for changes."
-                )
+                dir /b *.json *.txt 2>nul || echo "No JSON or TXT files"
             '''
             
             // Archive everything for review
@@ -166,9 +172,66 @@ pipeline {
         }
         success {
             echo '✅ Pipeline completed successfully - No breaking changes'
+            
+            // Send success email (optional)
+            emailext (
+                subject: "✅ SUCCESS: API Validation Passed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <h2>API Validation Successful</h2>
+                    <p>The API validation pipeline has completed successfully with no breaking changes detected.</p>
+                    <p><b>Job:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                    <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
+                    <p>The generated OpenAPI specification is available in the build artifacts.</p>
+                """,
+                to: "${env.EMAIL_RECIPIENTS}",
+                mimeType: 'text/html'
+            )
         }
         failure {
             echo '❌ Pipeline failed - Breaking changes detected'
+            
+            // Read breaking changes report for email
+            script {
+                def breakingChangesReport = ""
+                try {
+                    breakingChangesReport = readFile('breaking_changes_report.txt')
+                } catch (Exception e) {
+                    breakingChangesReport = "Breaking changes report not available. Check build logs for details."
+                }
+                
+                // Send failure email with breaking changes details
+                emailext (
+                    subject: "❌ FAILURE: API Breaking Changes Detected - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <h2>🚨 API Breaking Changes Detected</h2>
+                        <p>The API validation pipeline has failed due to breaking changes in the API specification.</p>
+                        
+                        <p><b>Job:</b> ${env.JOB_NAME}</p>
+                        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                        <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                        <p><b>Status:</b> ${currentBuild.currentResult}</p>
+                        
+                        <h3>Breaking Changes Report:</h3>
+                        <pre>${breakingChangesReport}</pre>
+                        
+                        <h3>Required Action:</h3>
+                        <ol>
+                            <li>Review the breaking changes listed above</li>
+                            <li>If changes are intentional, update the baseline by running:<br>
+                                <code>copy generated-swagger.json swagger.json</code></li>
+                            <li>If changes are not intentional, fix the API code</li>
+                            <li>Re-run the pipeline</li>
+                        </ol>
+                        
+                        <p>The detailed comparison files are available in the build artifacts.</p>
+                    """,
+                    to: "${env.EMAIL_RECIPIENTS}",
+                    mimeType: 'text/html',
+                    attachLog: true
+                )
+            }
         }
     }
 }
