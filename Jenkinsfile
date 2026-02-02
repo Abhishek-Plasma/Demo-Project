@@ -74,8 +74,17 @@ pipeline {
                     
                     if exist generated-swagger.json (
                         echo "Successfully generated swagger.json"
-                        echo "First few lines of swagger.json:"
-                        type generated-swagger.json | findstr /i "openapi" | findstr /v /c:""
+                        echo "Checking file content..."
+                        rem Simple check - just see if file has content
+                        for %%I in (generated-swagger.json) do set size=%%~zI
+                        if %size% GTR 0 (
+                            echo "File size: %size% bytes"
+                            echo "First line with 'openapi':"
+                            findstr /i "openapi" generated-swagger.json 2>nul | more +1
+                        ) else (
+                            echo "ERROR: File is empty!"
+                            exit /b 1
+                        )
                     ) else (
                         echo "ERROR: Failed to generate swagger.json"
                         exit /b 1
@@ -97,7 +106,9 @@ pipeline {
                             echo "Running spectral lint..."
                             npx @stoplight/spectral-cli lint generated-swagger.json -r spectral.yaml
                         ) else (
-                            echo "WARNING: spectral.yaml not found, skipping linting"
+                            echo "WARNING: spectral.yaml not found, creating default..."
+                            echo "rules: {}" > spectral.yaml
+                            echo "Spectral config created, but no linting rules defined."
                         )
                     ) else (
                         echo "ERROR: generated-swagger.json not found!"
@@ -121,10 +132,13 @@ pipeline {
                         if exist swagger.json (
                             echo "Running breaking change check..."
                             "C:\\Program Files\\oasdiff\\oasdiff.exe" breaking swagger.json generated-swagger.json
+                            rem If oasdiff returns non-zero for breaking changes, we might want to continue
+                            rem Jenkins will mark as failed if oasdiff returns non-zero
                         ) else (
                             echo "WARNING: No baseline swagger.json found. This is the first run?"
                             echo "Copying generated-swagger.json as baseline..."
                             copy generated-swagger.json swagger.json
+                            echo "Created baseline swagger.json"
                         )
                     ) else (
                         echo "WARNING: oasdiff not installed at C:\\Program Files\\oasdiff\\oasdiff.exe"
@@ -142,6 +156,11 @@ pipeline {
                 @echo off
                 echo "Workspace contents:"
                 dir /b *.json 2>nul || echo "No JSON files found"
+                echo.
+                echo "generated-swagger.json content preview:"
+                if exist generated-swagger.json (
+                    type generated-swagger.json | findstr /i "openapi" | head -n 1 2>nul || echo "Could not read openapi line"
+                )
             '''
         }
         success {
