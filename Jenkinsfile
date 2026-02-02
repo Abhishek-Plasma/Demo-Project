@@ -20,7 +20,7 @@ pipeline {
     }
 
     environment {
-        EMAIL_RECIPIENTS = 'abhishek@example.com'  // Update with your email
+        EMAIL_RECIPIENTS = 'theak18012002@gmail.com'  // Update with your email
         BUILD_URL = "${env.BUILD_URL}"
         JOB_NAME = "${env.JOB_NAME}"
         BUILD_NUMBER = "${env.BUILD_NUMBER}"
