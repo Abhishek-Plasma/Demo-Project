@@ -144,38 +144,14 @@ pipeline {
                             copy generated-swagger.json SwaggerJsonGen\\swagger.json
                         '''
                         
-                        // Commit using Jenkins credentials
-                        script {
-                            withCredentials([usernamePassword(
-                                credentialsId: 'github-token',  // Your Jenkins credential ID
-                                usernameVariable: 'GIT_USERNAME',
-                                passwordVariable: 'GIT_TOKEN'
-                            )]) {
-                                bat '''
-                                    @echo off
-                                    echo "Committing changes..."
-                                    git add SwaggerJsonGen\\swagger.json
-                                    git commit -m "${params.COMMIT_MESSAGE} - Build #%BUILD_NUMBER%"
-                                    echo "Changes committed locally"
-                                '''
-                            }
-                        }
-                        
-                        // Push using Jenkins checkout credentials
-                        checkout([$class: 'GitSCM',
-                            branches: [[name: '*/main']],
-                            extensions: [[$class: 'PreBuildMerge', options: [mergeTarget: '']]],
-                            userRemoteConfigs: [[
-                                url: 'https://github.com/Abhishek-Plasma/Demo-Project.git',
-                                credentialsId: 'github-token'  // Same credential used for checkout
-                            ]]
-                        ])
-                        
+                        // Commit and push in one step
                         bat '''
                             @echo off
-                            echo "Pushing to repository..."
+                            echo "Committing and pushing changes..."
+                            git add SwaggerJsonGen\\swagger.json
+                            git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
                             git push origin HEAD
-                            echo "✅ Changes pushed to repository"
+                            echo "✅ Changes committed and pushed to repository"
                         '''
                         
                         // Send success email
@@ -186,6 +162,7 @@ pipeline {
                                 <p>Breaking changes were detected and the API contract has been updated.</p>
                                 <p><b>Job:</b> ${env.JOB_NAME}</p>
                                 <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+                                <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                                 <p><b>Commit Message:</b> ${params.COMMIT_MESSAGE}</p>
                                 <h3>Changes Detected:</h3>
                                 <pre>${diffContent}</pre>
