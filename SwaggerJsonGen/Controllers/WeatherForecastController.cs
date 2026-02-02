@@ -31,7 +31,7 @@ namespace SwaggerJsonGen.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public IEnumerable<WeatherForecast1> Get()
+        public IEnumerable<WeatherForecast1> Get(string nothing)
         {
             return Enumerable.Range(1, 5).Select(index => new WeatherForecast1
             {
