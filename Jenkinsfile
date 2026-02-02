@@ -238,39 +238,15 @@ pipeline {
                         )
                         
                         echo "Comparing API definitions..."
-                        
-                        REM Use a simple file comparison method
-                        REM First check file sizes
-                        for %%I in ("SwaggerJsonGen\\swagger.json") do set baselineSize=%%~zI
-                        for %%I in (generated-swagger.json) do set generatedSize=%%~zI
-                        
-                        REM If sizes are different, we have changes
-                        if not "%baselineSize%"=="%generatedSize%" (
-                            echo "File sizes differ - BREAKING CHANGES DETECTED!"
-                            echo "Baseline size: %baselineSize% bytes"
-                            echo "Generated size: %generatedSize% bytes"
-                            echo "Files differ" > diff.txt
-                            exit /b 0
-                        )
-                        
-                        REM If sizes are same, do a simple content comparison
-                        REM Use a more robust comparison method
-                        certutil -hashfile "SwaggerJsonGen\\swagger.json" MD5 | find /v ":" | find /v "CertUtil" > baseline_hash.txt
-                        certutil -hashfile generated-swagger.json MD5 | find /v ":" | find /v "CertUtil" > generated_hash.txt
-                        
-                        fc baseline_hash.txt generated_hash.txt >nul
+                        fc "SwaggerJsonGen\\swagger.json" generated-swagger.json > diff.txt
                         
                         if errorlevel 1 (
                             echo "BREAKING CHANGES DETECTED!"
-                            echo "Files differ" > diff.txt
+                            exit /b 0
                         ) else (
                             echo "No breaking changes detected"
                             if exist diff.txt del diff.txt
                         )
-                        
-                        REM Clean up temp files
-                        if exist baseline_hash.txt del baseline_hash.txt
-                        if exist generated_hash.txt del generated_hash.txt
                     '''
                 }
             }
