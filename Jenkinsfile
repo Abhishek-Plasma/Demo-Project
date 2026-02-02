@@ -171,11 +171,24 @@ pipeline {
                         
                         // Commit and push
                         bat '''
-                            @echo off
                             echo "Committing and pushing changes..."
                             git add SwaggerJsonGen/swagger.json
                             git commit -m "%COMMIT_MESSAGE% - Build #%BUILD_NUMBER%"
-                            git push
+
+                            withCredentials([usernamePassword(
+                                credentialsId: 'github-token',
+                                usernameVariable: 'GIT_USER',
+                                passwordVariable: 'GIT_TOKEN'
+                            )]) {
+                                bat '''
+                                    @echo off
+                                    set GIT_TERMINAL_PROMPT=0
+
+                                    git remote set-url origin https://%GIT_USER%:%GIT_TOKEN%@github.com/Abhishek-Plasma/Demo-Project.git
+
+                                    git push
+                                    '''
+                                }
                             echo "✅ Changes committed and pushed to repository"
                         '''
                         
