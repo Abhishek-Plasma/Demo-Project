@@ -222,8 +222,6 @@ pipeline {
                                 echo "Preparing git environment..."
                                 git checkout main
                                 git fetch origin
-                                git reset --hard origin/main
-                                git clean -fdx
                                 git status
                             '''
                             
