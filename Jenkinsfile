@@ -156,9 +156,10 @@ pipeline {
                             @echo off
                             echo "Checking git status..."
                             git checkout main
-                            git pull origin main
+                            git pull
                             git reset --soft origin/main
                             git status
+                            git pull
                         '''
                         
                         // Update the file
