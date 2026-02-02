@@ -13,6 +13,8 @@ pipeline {
                     @echo off
                     echo "Cleaning previous generated files..."
                     if exist generated-swagger.json del generated-swagger.json
+                    if exist diff.txt del diff.txt
+                    if exist oasdiff_output.txt del oasdiff_output.txt
                     
                     echo "Checking for baseline swagger.json..."
                     if exist swagger.json (
@@ -68,7 +70,15 @@ pipeline {
                         for %%I in (generated-swagger.json) do echo File size: %%~zI bytes
                         
                         echo "Sample of generated swagger:"
-                        type generated-swagger.json | findstr /i "openapi title description version" | head -5
+                        setlocal enabledelayedexpansion
+                        set count=0
+                        for /f "tokens=*" %%a in (generated-swagger.json) do (
+                            echo | findstr /i "openapi title description version" <nul >nul && (
+                                echo %%a
+                                set /a count+=1
+                            )
+                            if !count! equ 5 exit /b 0
+                        )
                     ) else (
                         echo "ERROR: Failed to generate Swagger JSON"
                         exit /b 1
@@ -105,7 +115,7 @@ pipeline {
                         echo "  New: generated-swagger.json"
                     '''
                     
-                    // Try different methods to detect changes
+                    // Simple file comparison
                     bat '''
                         @echo off
                         echo.
@@ -120,6 +130,7 @@ pipeline {
                         
                         echo.
                         echo "=== METHOD 2: File size comparison ==="
+                        setlocal enabledelayedexpansion
                         for %%I in (swagger.json) do set baseline_size=%%~zI
                         for %%I in (generated-swagger.json) do set new_size=%%~zI
                         echo "Baseline size: !baseline_size! bytes"
@@ -137,7 +148,15 @@ pipeline {
                         echo.
                         echo "=== METHOD 3: OASDiff Tool ==="
                         
-                        rem Check if oasdiff is installed
+                        rem Check if oasdiff is installed at default location
+                        if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
+                            echo "Found oasdiff at C:\\Program Files\\oasdiff\\oasdiff.exe"
+                            set OASDIFF="C:\\Program Files\\oasdiff\\oasdiff.exe"
+                            goto runOasdiff
+                        )
+                        
+                        echo "oasdiff not found at default location."
+                        echo "Checking if oasdiff is in PATH..."
                         where oasdiff 2>nul
                         if errorlevel 0 (
                             echo "Found oasdiff in PATH"
@@ -145,52 +164,63 @@ pipeline {
                             goto runOasdiff
                         )
                         
-                        if exist "C:\\Program Files\\oasdiff\\oasdiff.exe" (
-                            echo "Found oasdiff at C:\\Program Files\\oasdiff\\oasdiff.exe"
-                            set OASDIFF="C:\\Program Files\\oasdiff\\oasdiff.exe"
-                            goto runOasdiff
-                        )
-                        
-                        if exist "C:\\Tools\\oasdiff\\oasdiff.exe" (
-                            echo "Found oasdiff at C:\\Tools\\oasdiff\\oasdiff.exe"
-                            set OASDIFF="C:\\Tools\\oasdiff\\oasdiff.exe"
-                            goto runOasdiff
-                        )
-                        
-                        echo "oasdiff not found. Installing temporarily..."
-                        
-                        rem Try to download oasdiff
-                        curl -L -o oasdiff_windows_amd64.zip https://github.com/Tufin/oasdiff/releases/latest/download/oasdiff_windows_amd64.zip 2>nul
-                        if exist oasdiff_windows_amd64.zip (
-                            tar -xf oasdiff_windows_amd64.zip oasdiff.exe
-                            set OASDIFF=oasdiff.exe
-                            echo "Installed oasdiff from GitHub release"
-                        ) else (
-                            echo "Could not download oasdiff. Skipping semantic diff."
-                            goto end
-                        )
+                        echo "oasdiff not available. Skipping semantic diff analysis."
+                        echo "Note: Install oasdiff for better breaking change detection."
+                        goto end
                         
                         :runOasdiff
                         echo "Running oasdiff breaking change detection..."
                         echo "Command: %OASDIFF% breaking swagger.json generated-swagger.json"
                         
                         %OASDIFF% breaking swagger.json generated-swagger.json > oasdiff_output.txt 2>&1
+                        set oasdiff_exit_code=%errorlevel%
                         
-                        if errorlevel 0 (
+                        if %oasdiff_exit_code% == 0 (
                             echo "SUCCESS: No breaking changes detected by oasdiff"
                             type oasdiff_output.txt
                         ) else (
-                            echo "BREAKING CHANGES DETECTED by oasdiff:"
+                            echo "BREAKING CHANGES DETECTED by oasdiff (exit code: %oasdiff_exit_code%):"
                             type oasdiff_output.txt
                             
                             echo.
                             echo "=== BREAKING CHANGE SUMMARY ==="
                             echo "The API has breaking changes that could break existing clients."
                             echo "Review the changes above before deploying."
+                            echo.
+                            echo "If these changes are intentional, update the baseline with:"
+                            echo "  copy generated-swagger.json swagger.json"
                         )
                         
                         :end
                         echo "Breaking change analysis complete"
+                    '''
+                }
+            }
+        }
+        
+        stage('Update Baseline') {
+            steps {
+                script {
+                    // Ask if we should update the baseline
+                    echo "Checking if baseline should be updated..."
+                    
+                    bat '''
+                        @echo off
+                        echo "Current baseline: swagger.json"
+                        echo "New API definition: generated-swagger.json"
+                        
+                        rem Check if files are different
+                        fc swagger.json generated-swagger.json > nul
+                        if errorlevel 1 (
+                            echo "Files are different. Options:"
+                            echo "1. Keep current baseline (no action)"
+                            echo "2. Update baseline with new version (copy generated-swagger.json to swagger.json)"
+                            echo.
+                            echo "For now, we'll keep the current baseline."
+                            echo "To update manually, run: copy generated-swagger.json swagger.json"
+                        ) else (
+                            echo "Files are identical - no update needed"
+                        )
                     '''
                 }
             }
@@ -205,20 +235,29 @@ pipeline {
             bat '''
                 @echo off
                 echo.
-                echo "Generated files:"
+                echo "Generated files in workspace:"
                 dir *.json 2>nul || echo "No JSON files"
-                echo.
-                echo "Diff files:"
-                dir diff.txt oasdiff_output.txt 2>nul || echo "No diff files"
+                
+                if exist diff.txt (
+                    echo.
+                    echo "=== DIFFERENCES DETECTED ==="
+                    echo "The new API differs from the baseline."
+                    echo "Review diff.txt for details."
+                )
+                
+                if exist oasdiff_output.txt (
+                    echo.
+                    echo "=== OASDIFF OUTPUT ==="
+                    type oasdiff_output.txt
+                )
                 
                 echo.
-                echo "=== RECOMMENDATION ==="
-                if exist diff.txt (
-                    echo "Changes detected in API definition."
-                    echo "If this is intentional, update the baseline:"
-                    echo "  copy generated-swagger.json swagger.json"
-                ) else (
-                    echo "No changes detected. API is stable."
+                echo "=== NEXT STEPS ==="
+                if exist swagger.json (
+                    echo "Baseline: swagger.json"
+                )
+                if exist generated-swagger.json (
+                    echo "New API: generated-swagger.json"
                 )
             '''
             
