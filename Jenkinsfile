@@ -69,7 +69,7 @@ pipeline {
                     echo "Installing Swashbuckle CLI..."
                     
                     REM First, check if dotnet is available
-                    where dotnet
+                    where dotnet >nul 2>nul
                     if errorlevel 1 (
                         echo "ERROR: dotnet not found in PATH"
                         echo "PATH: %PATH%"
@@ -77,7 +77,7 @@ pipeline {
                     )
                     
                     REM Check if Swashbuckle is already installed (without uninstalling first)
-                    dotnet tool list --global | findstr swashbuckle
+                    dotnet tool list --global | findstr swashbuckle >nul
                     if errorlevel 1 (
                         echo "Swashbuckle CLI not found. Installing..."
                         dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
@@ -87,7 +87,8 @@ pipeline {
                     
                     REM Show where the tool is installed - use swagger.exe, not dotnet-swagger
                     echo "Looking for swagger.exe..."
-                    where swagger
+                    REM Use cmd /c to prevent the where command from failing the entire script
+                    cmd /c "where swagger 2>nul" >nul
                     if errorlevel 1 (
                         echo "swagger not found in PATH"
                         echo "Trying to find it in dotnet tools directory..."
@@ -96,6 +97,8 @@ pipeline {
                         ) else (
                             echo "Not found in dotnet tools directory"
                         )
+                    ) else (
+                        echo "swagger found in PATH"
                     )
                     
                     echo "Swashbuckle CLI installation completed successfully"
@@ -328,7 +331,7 @@ pipeline {
                             <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                         """,
                         to: "${env.EMAIL_RECIPIENTS}",
-                            mimeType: 'text/html'
+                        mimeType: 'text/html'
                     )
                 }
             }
