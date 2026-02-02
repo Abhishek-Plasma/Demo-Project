@@ -245,7 +245,7 @@ pipeline {
                         if not exist swagger.json (
                             echo "No baseline found. Creating baseline..." >> breaking_changes_report.txt
                             echo "No baseline found. Creating baseline..."
-                            copy generated-swagger.json swagger.json
+                            copy generated-swagger.json SwaggerJsonGen//swagger.json
                             echo "Baseline created from current API." >> breaking_changes_report.txt
                             echo "Baseline created."
                             exit /b 0
