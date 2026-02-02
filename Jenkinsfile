@@ -10,7 +10,7 @@ pipeline {
         stage('Install Tools') {
             steps {
                 bat '''
-                    dotnet tool uninstalll Swashbuckle.AspNetCore.Cli
+                    dotnet tool uninstall Swashbuckle.AspNetCore.Cli
                     dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.6.2
                     dotnet tool install --global dotnet-tool
                     dotnet new tool-manifest --force
